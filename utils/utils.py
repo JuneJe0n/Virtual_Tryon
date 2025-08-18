@@ -3,34 +3,29 @@ import re, json
 from typing import List, Dict, Any, Optional
 from prompts import ALLOWED_SHAPES  # your allowed shape list
 
-# ---------- Shared regex ----------
+# --- Helper functions
 TAG_RE = re.compile(r"^<answer>\s*(\[.*\])\s*</answer>\s*$", re.DOTALL)
 
-
-# ---------- Shared helpers ----------
 def _extract_json_block(text: str) -> Optional[str]:
     m = TAG_RE.match(text.strip())
     return m.group(1) if m else None
 
 def _is_int(v) -> bool:
-    """Return True if v is effectively an integer (accepts 3 and 3.0)."""
     try:
         return float(v).is_integer()
     except Exception:
         return isinstance(v, int)
 
 def _validate_item(d: Dict[str, Any]) -> bool:
-    """Schema: shape ∈ ALLOWED_SHAPES; color r/g/b ∈ [0,255]; alpha ∈ [0,255]; sigma int; gamma int."""
+    """Schema validator"""
     if not isinstance(d, dict):
         return False
 
-    # shape
     if "shape" not in d or not isinstance(d["shape"], str):
         return False
     if d["shape"] not in ALLOWED_SHAPES:
         return False
 
-    # color
     c = d.get("color", {})
     if not isinstance(c, dict):
         return False
@@ -38,22 +33,23 @@ def _validate_item(d: Dict[str, Any]) -> bool:
         if k not in c or not _is_int(c[k]) or not (0 <= int(c[k]) <= 255):
             return False
 
-    # alpha
     if "alpha" not in d or not _is_int(d["alpha"]) or not (0 <= int(d["alpha"]) <= 255):
         return False
 
-    # sigma
     if "sigma" not in d or not _is_int(d["sigma"]):
         return False
 
-    # gamma (always present, integer; range checks are handled elsewhere if needed)
     if "gamma" not in d or not _is_int(d["gamma"]):
         return False
 
     return True
 
 def _safe_load_json(arr_str: str) -> Optional[List[Dict[str, Any]]]:
-    """Parse JSON string that must be a non-empty list of dicts."""
+    """
+    Parse JSON str to check :
+    - Top-level object is list
+    - Each element is dict
+    """
     try:
         obj = json.loads(arr_str)
         if isinstance(obj, list) and len(obj) >= 1 and all(isinstance(x, dict) for x in obj):
@@ -63,12 +59,17 @@ def _safe_load_json(arr_str: str) -> Optional[List[Dict[str, Any]]]:
         return None
 
 def _color_score(a: Dict[str,int], b: Dict[str,int]) -> float:
-    """RGB similarity: normalized L1 distance inverted to [0,1]."""
+    """
+    Normalized L1 distance in RGB space (0-1)
+    1.0 if colors are identical
+    """
     d = (abs(int(a["r"])-int(b["r"])) + abs(int(a["g"])-int(b["g"])) + abs(int(a["b"])-int(b["b"]))) / (3*255)
     return max(0.0, 1.0 - d)
 
 def _param_score_int(a: int, b: int, span: int) -> float:
-    """Compare ints with a max span; maps abs error to [0,1]."""
+    """
+    Compare ints like alpha, sigma, gamma, relative to their allowed span
+    """
     err = abs(int(a) - int(b)) / max(1, span)
     return max(0.0, 1.0 - err)
 
@@ -78,13 +79,13 @@ def _match_and_score(pred_list: List[Dict[str,Any]], ref_list: List[Dict[str,Any
       color 1/3, alpha 1/6, sigma 1/6, gamma 1/3.
     Penalizes missing reference items (0.15 each).
     """
-    used = [False]*len(ref_list)
+    used = [False]*len(ref_list) # Keeps track of which reference items have alr been matched
     per_item_scores = []
     ALPHA_SPAN, SIGMA_SPAN, GAMMA_SPAN = 255, 255, 100
 
     for p in pred_list:
         best, best_idx = 0.0, -1
-        for j, r in enumerate(ref_list):
+        for j, r in enumerate(ref_list): # Skip if that reference is alr matched
             if used[j] or p["shape"] != r["shape"]:
                 continue
             c_score = _color_score(p["color"], r["color"])
@@ -108,14 +109,13 @@ def _match_and_score(pred_list: List[Dict[str,Any]], ref_list: List[Dict[str,Any
     return final
 
 
-# ---------- Reward classes ----------
+# --- Reward classes
 class FormatReward:
     """
-    Format reward (0..1):
+    Format reward (0-1):
       - tags present (0.3)
       - JSON parses (0.3)
       - schema valid (0.4)
-    Callable: scores = FormatReward()(completions, **kwargs)
     """
     def __init__(self, w_tags=0.3, w_json=0.3, w_schema=0.4):
         self.w_tags = w_tags
@@ -139,9 +139,7 @@ class FormatReward:
 
 class AccuracyReward:
     """
-    Accuracy reward (0..1): compares predicted JSON vs reference `kwargs[reference_key]`.
-    Uses shape-aware greedy matching with color/alpha/sigma/gamma similarity.
-    Callable: scores = AccuracyReward(reference_key="solution")(completions, solution=batch_refs)
+    Accuracy reward (0-1)
     """
     def __init__(self, reference_key: str = "solution"):
         self.reference_key = reference_key

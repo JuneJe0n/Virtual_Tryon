@@ -11,7 +11,6 @@ from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
 from peft import LoraConfig, get_peft_model
 from trl import GRPOConfig, GRPOTrainer
 
-# ⬇️ import the class-based rewards + weighting wrapper
 from utils import (
     FormatReward,
     AccuracyReward,
@@ -50,9 +49,11 @@ lora_config = LoraConfig(
 model = get_peft_model(model, lora_config)
 model.print_trainable_parameters()
 
+
 # --- Load dataset
 # JSONL must have columns: image (path), solution (list[dict]), prompt (string)
 train_dataset = load_dataset("json", data_files=TRAIN_JSONL, split="train")
+
 
 # --- Data collator (image + text -> tensors)
 def make_vl_collator(processor):
@@ -73,6 +74,7 @@ def make_vl_collator(processor):
 
 data_collator = make_vl_collator(processor)
 
+
 # --- Training config
 training_args = GRPOConfig(
     output_dir=OUTPUT_DIR,
@@ -81,7 +83,7 @@ training_args = GRPOConfig(
     num_train_epochs=1,
     bf16=True,
 
-    per_device_train_batch_size=1,   # VLMs are heavy; start small
+    per_device_train_batch_size=1,  
     gradient_accumulation_steps=8,
     max_prompt_length=2048,
     max_completion_length=512,
@@ -98,7 +100,8 @@ training_args = GRPOConfig(
     top_p=0.95,
 )
 
-# --- Reward functions (class-based)
+
+# --- Reward functions 
 fmt_reward = FormatReward(w_tags=0.3, w_json=0.3, w_schema=0.4)
 acc_reward = AccuracyReward(reference_key="solution")
 len_reward = LengthGuardReward(min_len=10, max_len=8192, long_penalty=0.2)
@@ -114,6 +117,7 @@ reward_fns = [
     weighted(dup_reward, L_D),
 ]
 
+
 # --- Trainer
 trainer = GRPOTrainer(
     model=model,
@@ -123,6 +127,7 @@ trainer = GRPOTrainer(
     train_dataset=train_dataset,    # provides image path, solution, prompt
     data_collator=data_collator,    # turns (prompt,image) -> tensors + passes 'solution'
 )
+
 
 # --- Train & Save
 trainer.train()
