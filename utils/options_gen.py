@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Create random makeup looks (no overlapping classes) from product-level JSON.
 
