@@ -1,11 +1,11 @@
 """
-Create random makeup looks (no overlapping classes) from product-level JSON.
+Code that classifies products based on the makeup shape, and creates random makeup looks (no overlapping classes).
 
-Input JSON (products): list of {"code","name","options":[{"shape","color",...}, ...]}
+Input : json file for ameli makeup products (data/json/lviton-options.json)
 
-Outputs:
-- classified_products.json  -> { "LIP": [...], "EYESHADOW": [...], ... }
-- random_looks.json         -> [{ "id":"A0", "products":[{"code","name","options":[...]}, ...] }, ...]
+Outputs :
+- classified_products.json  
+- random_looks.json         
 """
 
 from __future__ import annotations

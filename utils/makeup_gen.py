@@ -12,16 +12,12 @@ from pathlib import Path
 from PIL import Image
 import numpy as np
 
-# from pathlib import Path
-# import sys
-# sys.path.append('/home/jiyoon/LViton/lviton')
-
 from lviton import LViton, MakeupOptions, MakeupShape
 
 # ─── PATH SETTINGS ──────────────────────────────────────────────
-JSON_FILE = Path("/home/jiyoon/LViton/data/json/random_looks.json")  # makeup look json
+JSON_FILE = Path("/home/jiyoon/data/json/makeup_looks/lviton-makeups.json")  # makeup look json
 BARE_DIR = Path("/home/jiyoon/data/FFHQ")  # face imgs
-OUT_DIR = Path("/home/jiyoon/LViton/data/test/results/random_results")  # output path
+OUT_DIR = Path("/home/jiyoon/data/LVtion_results/makeup_results")  # output path
 LIB_PATH = Path("/home/jiyoon/LViton/lib/liblviton-x86_64-linux-3.0.3.so")  # compiled LViton shared library
 FACE_LANDMARKER = Path("/home/jiyoon/LViton/model/face_landmarker.task")  # mediapipe model
 RANDOM_SEED = 42

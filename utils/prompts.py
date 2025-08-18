@@ -123,8 +123,7 @@ Each output object must follow this exact structure:
 """
 
 
-# Question
-"""
+QUESTION = """
 Analyze the attached face image and output a JSON list (length ≥ 1) of parameter sets that best match the observed makeup.
 
 Output rules:
