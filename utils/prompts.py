@@ -43,11 +43,18 @@ Each output object must follow this exact structure:
 - `EYESHADOW_LOWEREYE_BASIC` (gamma = 0)
 - `EYESHADOW_LOWEREYE_TRI_BASIC` (gamma = 0)
 
-**Special Effect Eyeshadows**
-- `EYESHADOW_SP` — Gamma: shimmer strength (0–100)
+**Shimmer pearl Eyeshadows**
+- `EYESHADOW_OVEREYE_SP` — Gamma: shimmer strength (0–100)
+- `EYESHADOW_OVEREYE_CENTER_SP` — Gamma: shimmer strength (0–100)
+- `EYESHADOW_OVEREYE_OUTER_SP` — Gamma: shimmer strength (0–100)
+- `EYESHADOW_INNEREYE_SP` - Gamma: shimmer strength (0–100)
+- `EYESHADOW_LOWEREYE_SP` - Gamma: shimmer strength (0–100)
 
 **Glitter Eyeshadows**
-- `EYESHADOW_GL` — Alpha: glitter amount, Gamma: glitter brightness
+- `EYESHADOW_OVEREYE_GL` — Alpha: glitter amount, Gamma: glitter brightness
+- `EYESHADOW_OVEREYE_CENTER_GL` — Alpha: glitter amount, Gamma: glitter brightness
+- `EYESHADOW_OVEREYE_OUTER_GL` - Alpha: glitter amount, Gamma: glitter brightness
+- `EYESHADOW_LOWEREYE_GL` - Alpha: glitter amount, Gamma: glitter brightness
 
 **Eyeliner**
 - `EYELINER_FILL_BASIC` — Gamma: line width (0–100)
@@ -66,7 +73,6 @@ Each output object must follow this exact structure:
 - `BLUSHER_GEN_Z_CENTER_BASIC` (gamma = 0)
 
 **Highlighter**
-- `HIGHLIGHTER_BASIC` — Gamma: only affects pixels brighter than this luma value
 - `HIGHLIGHTER_EYES_BASIC` — Gamma: only affects pixels brighter than this luma value
 - `HIGHLIGHTER_CHEEKBONE_BASIC` — Gamma: only affects pixels brighter than this luma value
 - `HIGHLIGHTER_NOSE_BRIDGE_BASIC` — Gamma: only affects pixels brighter than this luma value
