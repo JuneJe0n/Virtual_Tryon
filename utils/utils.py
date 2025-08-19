@@ -4,6 +4,25 @@ from .prompts import ALLOWED_SHAPES, SHAPE_FAMILY
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
+# --- WandB logging
+def _wandb_log(data: Dict[str, Any]):
+    try:
+        import wandb
+        if getattr(wandb, "run", None) is not None:
+            wandb.log(data)
+    except Exception:
+        pass
+
+def _mean(xs: List[float]) -> float:
+    return float(np.mean(xs)) if len(xs) else 0.0
+
+def _hist(xs: List[float]):
+    try:
+        import wandb
+        return wandb.Histogram(xs)
+    except Exception:
+        return None
+
 
 # --- Helper functions
 TAG_RE = re.compile(r"^<answer>\s*(\[.*\])\s*</answer>\s*$", re.DOTALL)
@@ -69,7 +88,6 @@ def _color_score(a: Dict[str, int], b: Dict[str, int], thresh: float = 0.3) -> f
     d = (abs(int(a["r"]) - int(b["r"])) +
          abs(int(a["g"]) - int(b["g"])) +
          abs(int(a["b"]) - int(b["b"]))) / (3 * 255)
-    
     if d > thresh:
         return 0.0
     return 1.0 - d
@@ -104,7 +122,6 @@ def _match_and_score_hungarian(pred_list: List[Dict[str,Any]], ref_list: List[Di
     if n == 0 and m == 0:
         return 1.0
     if n == 0 or m == 0:
-        miss_penalty = 0.15 * m
         return 0.0  # clamp to 0; no matches possible
 
     ALPHA_SPAN, SIGMA_SPAN, GAMMA_SPAN = 255, 255, 100
@@ -117,7 +134,7 @@ def _match_and_score_hungarian(pred_list: List[Dict[str,Any]], ref_list: List[Di
             a_score = _param_score_int(p["alpha"], r["alpha"], ALPHA_SPAN)
             s_score = _param_score_int(p["sigma"], r["sigma"], SIGMA_SPAN)
             g_score = _param_score_int(p["gamma"], r.get("gamma", 0), GAMMA_SPAN)
-            param_sim = (1/4)*c_score + (1/4)*a_score + (1/4)*s_score + (1/4)*g_score
+            param_sim = 0.25 * (c_score + a_score + s_score + g_score)
             sf = _shape_factor(p["shape"], r["shape"])
             S[i, j] = sf * param_sim
 
@@ -138,18 +155,27 @@ def _match_and_score_hungarian(pred_list: List[Dict[str,Any]], ref_list: List[Di
             sims.append(1.0 - C[i, j]) 
             matched_real_refs.add(j)
         else:
-            sims.append(0.0)      # Track unmatched pairs (dummy involved) -> sim=0
+            sims.append(0.0)      # dummy match -> sim=0
 
     unmatched_refs = m - len(matched_real_refs) 
-    base = sum(sims) / float(max(n, m))
+    base = sum(sims) / float(dim)
     miss_penalty = 0.15 * max(0, unmatched_refs)
     final = max(0.0, base - miss_penalty)
     return final
 
 def weighted(reward_callable, weight: float):
-    """Helper function for weighted sum"""
+    """
+    Helper function for weighted sum.
+    Also logs weighted reward means to wandb as 'reward_weighted/{name}' when available.
+    """
+    name = getattr(reward_callable, "name", reward_callable.__class__.__name__.lower())
+
     def f(completions: List[str], **kw) -> List[float]:
-        return [weight * x for x in reward_callable(completions, **kw)]
+        raw = reward_callable(completions, **kw)  
+        out = [weight * x for x in raw]
+        # log weighted mean
+        _wandb_log({f"reward_weighted/{name}": _mean(out)})
+        return out
     return f
 
 
@@ -165,9 +191,11 @@ class FormatReward:
         self.w_tags = w_tags
         self.w_json = w_json
         self.w_schema = w_schema
+        self.name = "format"
 
     def __call__(self, completions: List[str], **kwargs) -> List[float]:
         rewards = []
+        tags_flags, json_flags, schema_flags = [], [], []
         for content in completions:
             tags_ok = 1.0 if TAG_RE.match(content.strip()) else 0.0
             arr = _extract_json_block(content) if tags_ok else None
@@ -177,7 +205,19 @@ class FormatReward:
                 items = _safe_load_json(arr)
                 if items and all(_validate_item(it) for it in items):
                     schema_ok = 1.0
-            rewards.append(self.w_tags*tags_ok + self.w_json*json_ok + self.w_schema*schema_ok)
+
+            score = self.w_tags*tags_ok + self.w_json*json_ok + self.w_schema*schema_ok
+            rewards.append(score)
+            tags_flags.append(tags_ok); json_flags.append(json_ok); schema_flags.append(schema_ok)
+
+        # wandb logging (means + hist)
+        _wandb_log({
+            "reward/format": _mean(rewards),
+            "reward/format_hist": _hist(rewards) or _mean(rewards),
+            "reward/format_tags": _mean(tags_flags),
+            "reward/format_json": _mean(json_flags),
+            "reward/format_schema": _mean(schema_flags),
+        })
         return rewards
 
 
@@ -187,6 +227,7 @@ class AccuracyReward:
     """
     def __init__(self, reference_key: str = "solution"):
         self.reference_key = reference_key
+        self.name = "accuracy"
 
     def __call__(self, completions: List[str], **kwargs) -> List[float]:
         refs = kwargs.get(self.reference_key, None)
@@ -201,6 +242,11 @@ class AccuracyReward:
                 scores.append(0.0); continue
 
             scores.append(_match_and_score_hungarian(pred_list, ref_list))
+
+        _wandb_log({
+            "reward/accuracy": _mean(scores),
+            "reward/accuracy_hist": _hist(scores) or _mean(scores),
+        })
         return scores
 
 
@@ -208,20 +254,22 @@ class DuplicateShapeGuardReward:
     """
     Penalize duplicate identical items (shape + color + alpha + sigma + gamma)
       - no duplicates -> 1.0
-      - duplicates    -> 0.5
+      - duplicates    -> dup_penalty (default 0.5)
     """
     def __init__(self, dup_penalty: float = 0.5):
         self.dup_penalty = dup_penalty
+        self.name = "duplicate"
 
     def __call__(self, completions: List[str], **kwargs) -> List[float]:
         outs = []
+        dup_flags = []  # 1 if duplicate detected, else 0
         for c in completions:
             arr = _extract_json_block(c)
             if not arr:
-                outs.append(0.0); continue
+                outs.append(0.0); dup_flags.append(0.0); continue
             pred = _safe_load_json(arr)
             if not pred:
-                outs.append(0.0); continue
+                outs.append(0.0); dup_flags.append(0.0); continue
             seen = set(); ok = True
             for o in pred:
                 key = (
@@ -233,6 +281,11 @@ class DuplicateShapeGuardReward:
                     ok = False; break
                 seen.add(key)
             outs.append(1.0 if ok else self.dup_penalty)
+            dup_flags.append(0.0 if ok else 1.0)
+
+        _wandb_log({
+            "reward/duplicate": _mean(outs),
+            "reward/duplicate_hist": _hist(outs) or _mean(outs),
+            "reward/duplicate_rate": _mean(dup_flags),  
+        })
         return outs
-
-

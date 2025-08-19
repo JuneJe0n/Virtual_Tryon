@@ -18,6 +18,9 @@ from utils import (
     weighted,
 )
 
+import wandb
+wandb.init(project="lviton_grpo", name="qwen2.5-vl-run1")
+
 MODEL_ID = "Qwen/Qwen2.5-VL-3B-Instruct"
 TRAIN_JSONL = "/home/jiyoon/data/jsonl/all_looks.jsonl"  # {"image","solution","prompt"}
 OUTPUT_DIR = "/home/jiyoon/data/ckpts/Qwen2.5-VL-3B-Instruct-GRPO"
@@ -79,11 +82,14 @@ training_args = GRPOConfig(
     max_completion_length=512,
     num_generations=4,
 
-    # logging/saving/eval
-    logging_steps=10,
+    # logging/saving
     save_strategy="steps",
     save_steps=50,
-    report_to=["tensorboard"],
+    report_to=["wandb"],
+    run_name="Qwen2.5-VL-GRPO",
+    logging_steps=10,
+
+    # eval
     evaluation_strategy="steps",    
     eval_steps=50,                 
     load_best_model_at_end=False,   

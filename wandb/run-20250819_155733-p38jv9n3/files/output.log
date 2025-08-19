@@ -1,0 +1,167 @@
+You have video processor config saved in `preprocessor.json` file which is deprecated. Video processor configs should be saved in their own `video_preprocessor.json` file. You can rename the file or load and save the processor back which renames it automatically. Loading from `preprocessor.json` will be removed in v5.0.
+Loading checkpoint shards: 100%|███████████████████████| 2/2 [00:00<00:00,  2.12it/s]
+trainable params: 1,843,200 || all params: 3,756,466,176 || trainable%: 0.0491
+Map:  32%|██████████████████▋                                        | 2999/9500 [06:15<13:34,  7.98 examples/s]
+Traceback (most recent call last):
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/arrow_dataset.py", line 3666, in _map_single
+    writer.write(example)
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/arrow_writer.py", line 553, in write
+    self.write_examples_on_file()
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/arrow_writer.py", line 511, in write_examples_on_file
+    self.write_batch(batch_examples=batch_examples)
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/arrow_writer.py", line 628, in write_batch
+    inferred_features[col] = typed_sequence.get_inferred_type()
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/arrow_writer.py", line 170, in get_inferred_type
+    self._inferred_type = generate_from_arrow_type(pa.array(self).type)
+  File "pyarrow/array.pxi", line 256, in pyarrow.lib.array
+  File "pyarrow/array.pxi", line 118, in pyarrow.lib._handle_arrow_array_protocol
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/arrow_writer.py", line 244, in __arrow_array__
+    out = pa.array(cast_to_python_objects(data, only_1d_for_numpy=True))
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/features/features.py", line 474, in cast_to_python_objects
+    return _cast_to_python_objects(
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/features/features.py", line 429, in _cast_to_python_objects
+    [
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/features/features.py", line 430, in <listcomp>
+    _cast_to_python_objects(
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/features/features.py", line 375, in _cast_to_python_objects
+    return encode_pil_image(obj), True
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/features/image.py", line 324, in encode_pil_image
+    return {"path": None, "bytes": image_to_bytes(image)}
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/features/image.py", line 316, in image_to_bytes
+    image.save(buffer, format=format)
+  File "/usr/local/lib/python3.10/dist-packages/PIL/Image.py", line 2320, in save
+    save_handler(self, fp, filename)
+  File "/usr/local/lib/python3.10/dist-packages/PIL/PngImagePlugin.py", line 1374, in _save
+    ImageFile._save(im, _idat(fp, chunk), [("zip", (0, 0) + im.size, 0, rawmode)])
+  File "/usr/local/lib/python3.10/dist-packages/PIL/ImageFile.py", line 518, in _save
+    l, s, d = encoder.encode(bufsize)
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/jiyoon/LViton_GRPO/train.py", line 66, in <module>
+    train_dataset = train_raw.map(_load_image, num_proc=1)
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/arrow_dataset.py", line 560, in wrapper
+    out: Union["Dataset", "DatasetDict"] = func(self, *args, **kwargs)
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/arrow_dataset.py", line 3318, in map
+    for rank, done, content in Dataset._map_single(**unprocessed_kwargs):
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/arrow_dataset.py", line 3701, in _map_single
+    writer.finalize()
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/arrow_writer.py", line 658, in finalize
+    self.write_examples_on_file()
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/arrow_writer.py", line 511, in write_examples_on_file
+    self.write_batch(batch_examples=batch_examples)
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/arrow_writer.py", line 627, in write_batch
+    arrays.append(pa.array(typed_sequence))
+  File "pyarrow/array.pxi", line 256, in pyarrow.lib.array
+  File "pyarrow/array.pxi", line 118, in pyarrow.lib._handle_arrow_array_protocol
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/arrow_writer.py", line 244, in __arrow_array__
+    out = pa.array(cast_to_python_objects(data, only_1d_for_numpy=True))
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/features/features.py", line 474, in cast_to_python_objects
+    return _cast_to_python_objects(
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/features/features.py", line 429, in _cast_to_python_objects
+    [
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/features/features.py", line 430, in <listcomp>
+    _cast_to_python_objects(
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/features/features.py", line 375, in _cast_to_python_objects
+    return encode_pil_image(obj), True
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/features/image.py", line 324, in encode_pil_image
+    return {"path": None, "bytes": image_to_bytes(image)}
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/features/image.py", line 316, in image_to_bytes
+    image.save(buffer, format=format)
+  File "/usr/local/lib/python3.10/dist-packages/PIL/Image.py", line 2320, in save
+    save_handler(self, fp, filename)
+  File "/usr/local/lib/python3.10/dist-packages/PIL/PngImagePlugin.py", line 1374, in _save
+    ImageFile._save(im, _idat(fp, chunk), [("zip", (0, 0) + im.size, 0, rawmode)])
+  File "/usr/local/lib/python3.10/dist-packages/PIL/ImageFile.py", line 518, in _save
+    l, s, d = encoder.encode(bufsize)
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/arrow_dataset.py", line 3666, in _map_single
+    writer.write(example)
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/arrow_writer.py", line 553, in write
+    self.write_examples_on_file()
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/arrow_writer.py", line 511, in write_examples_on_file
+    self.write_batch(batch_examples=batch_examples)
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/arrow_writer.py", line 628, in write_batch
+    inferred_features[col] = typed_sequence.get_inferred_type()
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/arrow_writer.py", line 170, in get_inferred_type
+    self._inferred_type = generate_from_arrow_type(pa.array(self).type)
+  File "pyarrow/array.pxi", line 256, in pyarrow.lib.array
+  File "pyarrow/array.pxi", line 118, in pyarrow.lib._handle_arrow_array_protocol
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/arrow_writer.py", line 244, in __arrow_array__
+    out = pa.array(cast_to_python_objects(data, only_1d_for_numpy=True))
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/features/features.py", line 474, in cast_to_python_objects
+    return _cast_to_python_objects(
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/features/features.py", line 429, in _cast_to_python_objects
+    [
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/features/features.py", line 430, in <listcomp>
+    _cast_to_python_objects(
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/features/features.py", line 375, in _cast_to_python_objects
+    return encode_pil_image(obj), True
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/features/image.py", line 324, in encode_pil_image
+    return {"path": None, "bytes": image_to_bytes(image)}
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/features/image.py", line 316, in image_to_bytes
+    image.save(buffer, format=format)
+  File "/usr/local/lib/python3.10/dist-packages/PIL/Image.py", line 2320, in save
+    save_handler(self, fp, filename)
+  File "/usr/local/lib/python3.10/dist-packages/PIL/PngImagePlugin.py", line 1374, in _save
+    ImageFile._save(im, _idat(fp, chunk), [("zip", (0, 0) + im.size, 0, rawmode)])
+  File "/usr/local/lib/python3.10/dist-packages/PIL/ImageFile.py", line 518, in _save
+    l, s, d = encoder.encode(bufsize)
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/jiyoon/LViton_GRPO/train.py", line 66, in <module>
+    train_dataset = train_raw.map(_load_image, num_proc=1)
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/arrow_dataset.py", line 560, in wrapper
+    out: Union["Dataset", "DatasetDict"] = func(self, *args, **kwargs)
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/arrow_dataset.py", line 3318, in map
+    for rank, done, content in Dataset._map_single(**unprocessed_kwargs):
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/arrow_dataset.py", line 3701, in _map_single
+    writer.finalize()
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/arrow_writer.py", line 658, in finalize
+    self.write_examples_on_file()
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/arrow_writer.py", line 511, in write_examples_on_file
+    self.write_batch(batch_examples=batch_examples)
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/arrow_writer.py", line 627, in write_batch
+    arrays.append(pa.array(typed_sequence))
+  File "pyarrow/array.pxi", line 256, in pyarrow.lib.array
+  File "pyarrow/array.pxi", line 118, in pyarrow.lib._handle_arrow_array_protocol
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/arrow_writer.py", line 244, in __arrow_array__
+    out = pa.array(cast_to_python_objects(data, only_1d_for_numpy=True))
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/features/features.py", line 474, in cast_to_python_objects
+    return _cast_to_python_objects(
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/features/features.py", line 429, in _cast_to_python_objects
+    [
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/features/features.py", line 430, in <listcomp>
+    _cast_to_python_objects(
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/features/features.py", line 375, in _cast_to_python_objects
+    return encode_pil_image(obj), True
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/features/image.py", line 324, in encode_pil_image
+    return {"path": None, "bytes": image_to_bytes(image)}
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/datasets/features/image.py", line 316, in image_to_bytes
+    image.save(buffer, format=format)
+  File "/usr/local/lib/python3.10/dist-packages/PIL/Image.py", line 2320, in save
+    save_handler(self, fp, filename)
+  File "/usr/local/lib/python3.10/dist-packages/PIL/PngImagePlugin.py", line 1374, in _save
+    ImageFile._save(im, _idat(fp, chunk), [("zip", (0, 0) + im.size, 0, rawmode)])
+  File "/usr/local/lib/python3.10/dist-packages/PIL/ImageFile.py", line 518, in _save
+    l, s, d = encoder.encode(bufsize)
+KeyboardInterrupt
+Exception ignored in atexit callback: <function _start_and_connect_service.<locals>.teardown_atexit at 0x7f56e2400b80>
+Traceback (most recent call last):
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/wandb/sdk/lib/service/service_connection.py", line 54, in teardown_atexit
+    conn.teardown(hooks.exit_code)
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/wandb/sdk/lib/service/service_connection.py", line 182, in teardown
+    self._router.join()
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/wandb/sdk/interface/router.py", line 75, in join
+    self._thread.join()
+  File "/usr/lib/python3.10/threading.py", line 1096, in join
+    self._wait_for_tstate_lock()
+  File "/usr/lib/python3.10/threading.py", line 1116, in _wait_for_tstate_lock
+    if lock.acquire(block, timeout):
+KeyboardInterrupt:
