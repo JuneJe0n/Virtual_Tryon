@@ -1,6 +1,6 @@
 import re, json
 from typing import List, Dict, Any, Optional
-from prompts import ALLOWED_SHAPES, SHAPE_FAMILY
+from .prompts import ALLOWED_SHAPES, SHAPE_FAMILY
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 

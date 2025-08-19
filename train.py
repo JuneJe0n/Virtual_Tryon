@@ -1,5 +1,5 @@
 """
-Training script
+Training script with train/validation split
 """
 import os
 from typing import List, Dict, Any, Optional
@@ -19,8 +19,10 @@ from utils import (
 )
 
 MODEL_ID = "Qwen/Qwen2.5-VL-3B-Instruct"
-TRAIN_JSONL = "/home/jiyoon/data/jsonl/all_looks.jsonl"  # each line: {"image","solution","prompt"}
-OUTPUT_DIR = "/home/jiyoon/LViton_GRPO/model/Qwen2.5-VL-3B-Instruct-GRPO"
+TRAIN_JSONL = "/home/jiyoon/data/jsonl/all_looks.jsonl"  # {"image","solution","prompt"}
+OUTPUT_DIR = "/home/jiyoon/data/ckpts/Qwen2.5-VL-3B-Instruct-GRPO"
+VAL_RATIO = 0.05
+SEED = 42
 
 # --- load base model & processor
 processor = AutoProcessor.from_pretrained(MODEL_ID, use_fast=True, padding_side="left")
@@ -49,54 +51,46 @@ model = get_peft_model(model, lora_config)
 model.print_trainable_parameters()
 
 
-# --- Load dataset
-# JSONL must have columns: image (path), solution (list[dict]), prompt (string)
-train_dataset = load_dataset("json", data_files=TRAIN_JSONL, split="train")
+# --- Load & split dataset
+raw_ds = load_dataset("json", data_files=TRAIN_JSONL, split="train")
+splits = raw_ds.train_test_split(test_size=VAL_RATIO, seed=SEED)
+train_raw, eval_raw = splits["train"], splits["test"]
+
+def _load_image(example):
+    example["image"] = Image.open(example["image"]).convert("RGB")
+    return example
+
+train_dataset = train_raw.map(_load_image, num_proc=1)
+eval_dataset  = eval_raw.map(_load_image,  num_proc=1)
 
 
-# --- Data collator (image + text -> tensors)
-def make_vl_collator(processor):
-    def collate(batch):
-        prompts = [ex["prompt"] for ex in batch]
-        # load images as RGB
-        images = [Image.open(ex["image"]).convert("RGB") for ex in batch]
-        proc = processor(
-            text=prompts,
-            images=images,
-            padding=True,
-            return_tensors="pt",
-        )
-        # Keep ground-truth solutions for rewards
-        proc["solution"] = [ex["solution"] for ex in batch]
-        return proc
-    return collate
-
-data_collator = make_vl_collator(processor)
-
-
-# --- Training config
+# --- Training config 
 training_args = GRPOConfig(
     output_dir=OUTPUT_DIR,
     learning_rate=1e-5,
-    remove_unused_columns=False,     # keep 'solution' for rewards
+    remove_unused_columns=False,   # keep 'solution' for reward fns
     num_train_epochs=1,
     bf16=True,
 
-    per_device_train_batch_size=1,  
+    per_device_train_batch_size=1,
     gradient_accumulation_steps=8,
-    max_prompt_length=2048,
-    max_completion_length=512,
-    num_generations=4,               # GRPO: number of samples per prompt
 
+    max_prompt_length=2048,       
+    max_completion_length=512,
+    num_generations=4,
+
+    # logging/saving/eval
     logging_steps=10,
     save_strategy="steps",
     save_steps=50,
     report_to=["tensorboard"],
+    evaluation_strategy="steps",    
+    eval_steps=50,                 
+    load_best_model_at_end=False,   
 
-    # generation settings for sampling during GRPO rollouts
-    do_sample=True,
     temperature=0.7,
     top_p=0.95,
+    generation_kwargs={"do_sample": True},
 )
 
 
@@ -105,23 +99,21 @@ fmt_reward = FormatReward(w_tags=0.3, w_json=0.3, w_schema=0.4)
 acc_reward = AccuracyReward(reference_key="solution")
 dup_reward = DuplicateShapeGuardReward(dup_penalty=0.5)
 
-L_F, L_A, L_L, L_D = 0.5, 1.0, 0.2
-
+L_F, L_A, L_D = 0.5, 1.0, 0.2
 reward_fns = [
     weighted(fmt_reward, L_F),
     weighted(acc_reward, L_A),
     weighted(dup_reward, L_D),
 ]
 
-
-# --- Trainer
+# --- Trainer 
 trainer = GRPOTrainer(
     model=model,
-    processing_class=processor,     # tokenizer+image processor
-    reward_funcs=reward_fns,        # GRPO sums per-sample rewards from each callable
+    processing_class=processor,
+    reward_funcs=reward_fns,
     args=training_args,
-    train_dataset=train_dataset,    # provides image path, solution, prompt
-    data_collator=data_collator,    # turns (prompt,image) -> tensors + passes 'solution'
+    train_dataset=train_dataset,
+    eval_dataset=eval_dataset,   
 )
 
 
@@ -129,6 +121,3 @@ trainer = GRPOTrainer(
 trainer.train()
 trainer.save_model(training_args.output_dir)
 processor.save_pretrained(training_args.output_dir)
-
-# (optional) push to hub
-# trainer.push_to_hub()
