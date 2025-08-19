@@ -14,7 +14,6 @@ from trl import GRPOConfig, GRPOTrainer
 from utils import (
     FormatReward,
     AccuracyReward,
-    LengthGuardReward,
     DuplicateShapeGuardReward,
     weighted,
 )
@@ -104,16 +103,13 @@ training_args = GRPOConfig(
 # --- Reward functions 
 fmt_reward = FormatReward(w_tags=0.3, w_json=0.3, w_schema=0.4)
 acc_reward = AccuracyReward(reference_key="solution")
-len_reward = LengthGuardReward(min_len=10, max_len=8192, long_penalty=0.2)
 dup_reward = DuplicateShapeGuardReward(dup_penalty=0.5)
 
-# weights (tune as needed)
-L_F, L_A, L_L, L_D = 0.5, 1.0, 0.2, 0.2
+L_F, L_A, L_L, L_D = 0.5, 1.0, 0.2
 
 reward_fns = [
     weighted(fmt_reward, L_F),
     weighted(acc_reward, L_A),
-    weighted(len_reward, L_L),
     weighted(dup_reward, L_D),
 ]
 

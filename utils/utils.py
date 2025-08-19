@@ -1,7 +1,9 @@
-# rewards.py
 import re, json
 from typing import List, Dict, Any, Optional
-from prompts import ALLOWED_SHAPES  # your allowed shape list
+from prompts import ALLOWED_SHAPES, SHAPE_FAMILY
+import numpy as np
+from scipy.optimize import linear_sum_assignment
+
 
 # --- Helper functions
 TAG_RE = re.compile(r"^<answer>\s*(\[.*\])\s*</answer>\s*$", re.DOTALL)
@@ -58,55 +60,97 @@ def _safe_load_json(arr_str: str) -> Optional[List[Dict[str, Any]]]:
     except Exception:
         return None
 
-def _color_score(a: Dict[str,int], b: Dict[str,int]) -> float:
+def _color_score(a: Dict[str, int], b: Dict[str, int], thresh: float = 0.3) -> float:
     """
-    Normalized L1 distance in RGB space (0-1)
-    1.0 if colors are identical
+    Normalized L1 distance in RGB space (0-1).
+    1.0 if colors are identical.
+    Returns 0.0 if distance > thresh.
     """
-    d = (abs(int(a["r"])-int(b["r"])) + abs(int(a["g"])-int(b["g"])) + abs(int(a["b"])-int(b["b"]))) / (3*255)
-    return max(0.0, 1.0 - d)
+    d = (abs(int(a["r"]) - int(b["r"])) +
+         abs(int(a["g"]) - int(b["g"])) +
+         abs(int(a["b"]) - int(b["b"]))) / (3 * 255)
+    
+    if d > thresh:
+        return 0.0
+    return 1.0 - d
 
-def _param_score_int(a: int, b: int, span: int) -> float:
+def _param_score_int(a: int, b: int, span: int, thresh: float = 0.3) -> float:
     """
-    Compare ints like alpha, sigma, gamma, relative to their allowed span
+    Compare ints like alpha, sigma, gamma, relative to their allowed span.
     """
-    err = abs(int(a) - int(b)) / max(1, span)
-    return max(0.0, 1.0 - err)
+    err = abs(int(a) - int(b)) / max(1, span)  # normalized [0,1]
+    if err > thresh:
+        return 0.0
+    return 1.0 - err
 
-def _match_and_score(pred_list: List[Dict[str,Any]], ref_list: List[Dict[str,Any]]) -> float:
+def _shape_factor(pred_shape: str, ref_shape: str) -> float:
+    """1.0 exact shape, 0.6 same family, 0.2 cross-family."""
+    if pred_shape == ref_shape:
+        return 1.0
+    pf, rf = SHAPE_FAMILY.get(pred_shape, ""), SHAPE_FAMILY.get(ref_shape, "")
+    if pf and rf and pf == rf:
+        return 0.6
+    return 0.2
+
+def _match_and_score_hungarian(pred_list: List[Dict[str,Any]], ref_list: List[Dict[str,Any]]) -> float:
     """
-    Greedy shape-aware matching; per-item score weights:
-      color 1/3, alpha 1/6, sigma 1/6, gamma 1/3.
-    Penalizes missing reference items (0.15 each).
+    Optimal global assignment with soft shape factors and dummy padding.
+    
+    - Similarity(p,r) = shape_factor * param_similarity
+    - Cost = 1 - Similarity
+    - Score = mean(matched_similarities) normalized by max(n_pred, n_ref) minus 0.15 per unmatched ref.
     """
-    used = [False]*len(ref_list) # Keeps track of which reference items have alr been matched
-    per_item_scores = []
+    n, m = len(pred_list), len(ref_list)
+    if n == 0 and m == 0:
+        return 1.0
+    if n == 0 or m == 0:
+        miss_penalty = 0.15 * m
+        return 0.0  # clamp to 0; no matches possible
+
     ALPHA_SPAN, SIGMA_SPAN, GAMMA_SPAN = 255, 255, 100
 
-    for p in pred_list:
-        best, best_idx = 0.0, -1
-        for j, r in enumerate(ref_list): # Skip if that reference is alr matched
-            if used[j] or p["shape"] != r["shape"]:
-                continue
+    # Similarity matrix S (n x m)
+    S = np.zeros((n, m), dtype=float)
+    for i, p in enumerate(pred_list):
+        for j, r in enumerate(ref_list):
             c_score = _color_score(p["color"], r["color"])
             a_score = _param_score_int(p["alpha"], r["alpha"], ALPHA_SPAN)
             s_score = _param_score_int(p["sigma"], r["sigma"], SIGMA_SPAN)
             g_score = _param_score_int(p["gamma"], r.get("gamma", 0), GAMMA_SPAN)
-            score = (1/3)*c_score + (1/6)*a_score + (1/6)*s_score + (1/3)*g_score
-            if score > best:
-                best, best_idx = score, j
-        if best_idx >= 0:
-            used[best_idx] = True
-            per_item_scores.append(best)
+            param_sim = (1/4)*c_score + (1/4)*a_score + (1/4)*s_score + (1/4)*g_score
+            sf = _shape_factor(p["shape"], r["shape"])
+            S[i, j] = sf * param_sim
+
+    # Convert to score to cost 
+    C = 1.0 - S
+    dim = max(n, m)
+
+    # Pad to square w dummies
+    C_pad = np.ones((dim, dim), dtype=float) 
+    C_pad[:n, :m] = C
+
+    row_ind, col_ind = linear_sum_assignment(C_pad)
+
+    sims = []
+    matched_real_refs = set()
+    for i, j in zip(row_ind, col_ind):
+        if i < n and j < m:
+            sims.append(1.0 - C[i, j]) 
+            matched_real_refs.add(j)
         else:
-            per_item_scores.append(0.0)
+            sims.append(0.0)      # Track unmatched pairs (dummy involved) -> sim=0
 
-    missing = (len(ref_list) - sum(used))
-    miss_penalty = 0.15 * max(0, missing)
-
-    base = sum(per_item_scores) / max(1, len(pred_list))
+    unmatched_refs = m - len(matched_real_refs) 
+    base = sum(sims) / float(max(n, m))
+    miss_penalty = 0.15 * max(0, unmatched_refs)
     final = max(0.0, base - miss_penalty)
     return final
+
+def weighted(reward_callable, weight: float):
+    """Helper function for weighted sum"""
+    def f(completions: List[str], **kw) -> List[float]:
+        return [weight * x for x in reward_callable(completions, **kw)]
+    return f
 
 
 # --- Reward classes
@@ -139,7 +183,7 @@ class FormatReward:
 
 class AccuracyReward:
     """
-    Accuracy reward (0-1)
+    Accuracy reward (0-1) using global Hungarian assignment
     """
     def __init__(self, reference_key: str = "solution"):
         self.reference_key = reference_key
@@ -153,42 +197,16 @@ class AccuracyReward:
             if not arr:
                 scores.append(0.0); continue
             pred_list = _safe_load_json(arr)
-            if not pred_list:
+            if not pred_list or not all(_validate_item(x) for x in pred_list):
                 scores.append(0.0); continue
-            if not all(_validate_item(x) for x in pred_list):
-                scores.append(0.0); continue
-            scores.append(_match_and_score(pred_list, ref_list))
+
+            scores.append(_match_and_score_hungarian(pred_list, ref_list))
         return scores
-
-
-class LengthGuardReward:
-    """
-    Length guard:
-      - < 10 chars -> 0.0
-      - > 8192 chars -> 0.2 (soft penalty)
-      - else -> 1.0
-    """
-    def __init__(self, min_len: int = 10, max_len: int = 8192, long_penalty: float = 0.2):
-        self.min_len = min_len
-        self.max_len = max_len
-        self.long_penalty = long_penalty
-
-    def __call__(self, completions: List[str], **kwargs) -> List[float]:
-        outs = []
-        for c in completions:
-            n = len(c)
-            if n < self.min_len:
-                outs.append(0.0)
-            elif n > self.max_len:
-                outs.append(self.long_penalty)
-            else:
-                outs.append(1.0)
-        return outs
 
 
 class DuplicateShapeGuardReward:
     """
-    Penalize duplicate identical items (shape + color + alpha + sigma + gamma).
+    Penalize duplicate identical items (shape + color + alpha + sigma + gamma)
       - no duplicates -> 1.0
       - duplicates    -> 0.5
     """
@@ -218,9 +236,3 @@ class DuplicateShapeGuardReward:
         return outs
 
 
-# ---------- Optional: simple weighting wrapper ----------
-def weighted(reward_callable, weight: float):
-    """Return a callable that scales another reward's outputs by `weight`."""
-    def f(completions: List[str], **kw) -> List[float]:
-        return [weight * x for x in reward_callable(completions, **kw)]
-    return f
