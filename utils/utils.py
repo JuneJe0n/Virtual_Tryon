@@ -1,8 +1,11 @@
 import re, json
+import os
 from typing import List, Dict, Any, Optional
 from .prompts import ALLOWED_SHAPES, SHAPE_FAMILY
 import numpy as np
 from scipy.optimize import linear_sum_assignment
+
+
 
 # --- WandB logging
 def _wandb_log(data: Dict[str, Any]):
@@ -12,6 +15,42 @@ def _wandb_log(data: Dict[str, Any]):
             wandb.log(data)
     except Exception:
         pass
+
+# Global variable to store completions file path
+_COMPLETIONS_FILE = None
+
+def set_completions_file(filepath: str):
+    """Set the global completions file path"""
+    global _COMPLETIONS_FILE
+    _COMPLETIONS_FILE = filepath
+
+# --- Completion logging
+def _log_completions(completions: List[str], completions_file: str = None, **kwargs):
+    """Log completions to file"""
+    global _COMPLETIONS_FILE
+    if not completions_file:
+        completions_file = _COMPLETIONS_FILE
+    if not completions_file:
+        return
+    
+    try:
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(completions_file), exist_ok=True)
+        
+        # Save as readable text format
+        with open(completions_file, "a", encoding="utf-8") as f:
+            f.write("=" * 80 + "\n")
+            f.write(f"BATCH: {len(completions)} completions\n")
+            f.write("=" * 80 + "\n")
+            
+            for i, completion in enumerate(completions):
+                f.write(f"\n--- COMPLETION {i+1} ---\n")
+                f.write(completion)
+                f.write("\n")
+            
+            f.write("\n")
+    except Exception as e:
+        print(f"Warning: Could not save completions to {completions_file}: {e}")
 
 def _mean(xs: List[float]) -> float:
     return float(np.mean(xs)) if len(xs) else 0.0
@@ -196,6 +235,10 @@ class FormatReward:
     def __call__(self, completions: List[str], **kwargs) -> List[float]:
         rewards = []
         tags_flags, json_flags, schema_flags = [], [], []
+        
+        # Log completions to file
+        _log_completions(completions, **kwargs)
+        
         for content in completions:
             tags_ok = 1.0 if TAG_RE.match(content.strip()) else 0.0
             arr = _extract_json_block(content) if tags_ok else None
@@ -213,7 +256,6 @@ class FormatReward:
         # wandb logging (means + hist)
         _wandb_log({
             "reward/format": _mean(rewards),
-            "reward/format_hist": _hist(rewards) or _mean(rewards),
             "reward/format_tags": _mean(tags_flags),
             "reward/format_json": _mean(json_flags),
             "reward/format_schema": _mean(schema_flags),
@@ -245,7 +287,6 @@ class AccuracyReward:
 
         _wandb_log({
             "reward/accuracy": _mean(scores),
-            "reward/accuracy_hist": _hist(scores) or _mean(scores),
         })
         return scores
 
@@ -285,7 +326,6 @@ class DuplicateShapeGuardReward:
 
         _wandb_log({
             "reward/duplicate": _mean(outs),
-            "reward/duplicate_hist": _hist(outs) or _mean(outs),
             "reward/duplicate_rate": _mean(dup_flags),  
         })
         return outs

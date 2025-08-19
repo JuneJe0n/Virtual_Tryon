@@ -7,6 +7,7 @@ from typing import List, Dict, Any, Optional
 import torch
 from PIL import Image
 from datasets import load_dataset
+from datasets import Image as HFImage
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
 from peft import LoraConfig, get_peft_model
 from trl import GRPOConfig, GRPOTrainer
@@ -16,16 +17,21 @@ from utils import (
     AccuracyReward,
     DuplicateShapeGuardReward,
     weighted,
+    set_completions_file,
 )
 
 import wandb
-wandb.init(project="lviton_grpo", name="qwen2.5-vl-run1")
+wandb.init(project="lviton_grpo", name="qwen2.5-vl-run0")
 
 MODEL_ID = "Qwen/Qwen2.5-VL-3B-Instruct"
-TRAIN_JSONL = "/home/jiyoon/data/jsonl/all_looks.jsonl"  # {"image","solution","prompt"}
+TRAIN_JSONL = "/home/jiyoon/data/jsonl/training_data/all_looks.jsonl"  # {"image","solution","prompt"}
 OUTPUT_DIR = "/home/jiyoon/data/ckpts/Qwen2.5-VL-3B-Instruct-GRPO"
+COMPLETIONS_FILE = "/home/jiyoon/data/jsonl/completions/run_0.jsonl"
 VAL_RATIO = 0.05
 SEED = 42
+
+# Set completions file for logging
+set_completions_file(COMPLETIONS_FILE)
 
 # --- load base model & processor
 processor = AutoProcessor.from_pretrained(MODEL_ID, use_fast=True, padding_side="left")
@@ -53,18 +59,17 @@ lora_config = LoraConfig(
 model = get_peft_model(model, lora_config)
 model.print_trainable_parameters()
 
+if hasattr(model, "enable_input_require_grads"):
+    model.enable_input_require_grads()
+else:
+    model.get_input_embeddings().requires_grad_(True)
 
 # --- Load & split dataset
 raw_ds = load_dataset("json", data_files=TRAIN_JSONL, split="train")
+raw_ds = raw_ds.cast_column("image", HFImage()) # lazy decoding
+
 splits = raw_ds.train_test_split(test_size=VAL_RATIO, seed=SEED)
-train_raw, eval_raw = splits["train"], splits["test"]
-
-def _load_image(example):
-    example["image"] = Image.open(example["image"]).convert("RGB")
-    return example
-
-train_dataset = train_raw.map(_load_image, num_proc=1)
-eval_dataset  = eval_raw.map(_load_image,  num_proc=1)
+train_dataset, eval_dataset = splits["train"], splits["test"]
 
 
 # --- Training config 
@@ -88,11 +93,12 @@ training_args = GRPOConfig(
     report_to=["wandb"],
     run_name="Qwen2.5-VL-GRPO",
     logging_steps=10,
+    log_completions=True,              
+    num_completions_to_print=4,
 
-    # eval
-    evaluation_strategy="steps",    
-    eval_steps=50,                 
-    load_best_model_at_end=False,   
+    eval_strategy="steps",
+    eval_steps=50,
+    load_best_model_at_end=False,
 
     temperature=0.7,
     top_p=0.95,

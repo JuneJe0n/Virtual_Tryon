@@ -1,0 +1,6 @@
+{"time":"2025-08-19T17:54:40.961551301+09:00","level":"INFO","msg":"stream: starting","core version":"0.21.1"}
+{"time":"2025-08-19T17:54:41.306785183+09:00","level":"INFO","msg":"stream: created new stream","id":"paouuzdt"}
+{"time":"2025-08-19T17:54:41.306852674+09:00","level":"INFO","msg":"stream: started","id":"paouuzdt"}
+{"time":"2025-08-19T17:54:41.306972163+09:00","level":"INFO","msg":"writer: started","stream_id":"paouuzdt"}
+{"time":"2025-08-19T17:54:41.306971823+09:00","level":"INFO","msg":"handler: started","stream_id":"paouuzdt"}
+{"time":"2025-08-19T17:54:41.307079948+09:00","level":"INFO","msg":"sender: started","stream_id":"paouuzdt"}

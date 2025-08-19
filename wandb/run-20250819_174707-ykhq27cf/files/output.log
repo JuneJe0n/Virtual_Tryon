@@ -1,0 +1,58 @@
+You have video processor config saved in `preprocessor.json` file which is deprecated. Video processor configs should be saved in their own `video_preprocessor.json` file. You can rename the file or load and save the processor back which renames it automatically. Loading from `preprocessor.json` will be removed in v5.0.
+Loading checkpoint shards: 100%|███████████████████████████████████████████████████████████████████| 2/2 [00:00<00:00,  2.09it/s]
+trainable params: 1,843,200 || all params: 3,756,466,176 || trainable%: 0.0491
+  0%|                                                                                                   | 0/4750 [00:00<?, ?it/s]/home/jiyoon/.local/lib/python3.10/site-packages/torch/utils/checkpoint.py:92: UserWarning: None of the inputs have requires_grad=True. Gradients will be None
+Warning: Could not save completions to /home/jiyoon/data/jsonl/completions/run_0.jsonl: Object of type PngImageFile is not JSON serializable
+  warnings.warn(
+/home/jiyoon/.local/lib/python3.10/site-packages/torch/utils/checkpoint.py:295: FutureWarning: `torch.cpu.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cpu', args...)` instead.
+  with torch.enable_grad(), device_autocast_ctx, torch.cpu.amp.autocast(**ctx.cpu_autocast_kwargs):  # type: ignore[attr-defined]
+  0%|                                                                                        | 3/4750 [01:12<31:32:25, 23.92s/it]Traceback (most recent call last):
+Warning: Could not save completions to /home/jiyoon/data/jsonl/completions/run_0.jsonl: Object of type PngImageFile is not JSON serializable
+Warning: Could not save completions to /home/jiyoon/data/jsonl/completions/run_0.jsonl: Object of type PngImageFile is not JSON serializable
+  File "/home/jiyoon/LViton_GRPO/train.py", line 133, in <module>
+    trainer.train()
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/transformers/trainer.py", line 2238, in train
+    return inner_training_loop(
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/transformers/trainer.py", line 2582, in _inner_training_loop
+    tr_loss_step = self.training_step(model, inputs, num_items_in_batch)
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/transformers/trainer.py", line 3790, in training_step
+    inputs = self._prepare_inputs(inputs)
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/trl/extras/profiling.py", line 98, in wrapper
+    return func(self, *args, **kwargs)
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/trl/trainer/grpo_trainer.py", line 1258, in _prepare_inputs
+    generation_batch = self._generate_and_score_completions(generation_batch)
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/trl/trainer/grpo_trainer.py", line 1574, in _generate_and_score_completions
+    prompt_completion_ids = unwrapped_model.generate(
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/peft/peft_model.py", line 1973, in generate
+    outputs = self.base_model.generate(*args, **kwargs)
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+    return func(*args, **kwargs)
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/transformers/generation/utils.py", line 2634, in generate
+    result = self._sample(
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/transformers/generation/utils.py", line 3660, in _sample
+    next_tokens = torch.multinomial(probs, num_samples=1).squeeze(1)
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "/home/jiyoon/LViton_GRPO/train.py", line 133, in <module>
+    trainer.train()
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/transformers/trainer.py", line 2238, in train
+    return inner_training_loop(
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/transformers/trainer.py", line 2582, in _inner_training_loop
+    tr_loss_step = self.training_step(model, inputs, num_items_in_batch)
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/transformers/trainer.py", line 3790, in training_step
+    inputs = self._prepare_inputs(inputs)
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/trl/extras/profiling.py", line 98, in wrapper
+    return func(self, *args, **kwargs)
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/trl/trainer/grpo_trainer.py", line 1258, in _prepare_inputs
+    generation_batch = self._generate_and_score_completions(generation_batch)
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/trl/trainer/grpo_trainer.py", line 1574, in _generate_and_score_completions
+    prompt_completion_ids = unwrapped_model.generate(
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/peft/peft_model.py", line 1973, in generate
+    outputs = self.base_model.generate(*args, **kwargs)
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+    return func(*args, **kwargs)
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/transformers/generation/utils.py", line 2634, in generate
+    result = self._sample(
+  File "/home/jiyoon/.local/lib/python3.10/site-packages/transformers/generation/utils.py", line 3660, in _sample
+    next_tokens = torch.multinomial(probs, num_samples=1).squeeze(1)
+KeyboardInterrupt
