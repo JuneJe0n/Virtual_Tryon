@@ -64,6 +64,7 @@ if hasattr(model, "enable_input_require_grads"):
 else:
     model.get_input_embeddings().requires_grad_(True)
 
+
 # --- Load & split dataset
 raw_ds = load_dataset("json", data_files=TRAIN_JSONL, split="train")
 raw_ds = raw_ds.cast_column("image", HFImage()) # lazy decoding

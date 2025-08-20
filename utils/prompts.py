@@ -136,6 +136,7 @@ Output rules:
 - Do not include explanations or extra text.
 """
 
+
 ALLOWED_SHAPES = [
     "FACE_BASIC",
     "EYEBROW_BASIC",

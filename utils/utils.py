@@ -6,7 +6,6 @@ import numpy as np
 from scipy.optimize import linear_sum_assignment
 
 
-
 # --- WandB logging
 def _wandb_log(data: Dict[str, Any]):
     try:
@@ -23,6 +22,11 @@ def set_completions_file(filepath: str):
     """Set the global completions file path"""
     global _COMPLETIONS_FILE
     _COMPLETIONS_FILE = filepath
+
+
+def _mean(xs: List[float]) -> float:
+    return float(np.mean(xs)) if len(xs) else 0.0
+
 
 # --- Completion logging
 def _log_completions(completions: List[str], completions_file: str = None, **kwargs):
@@ -52,16 +56,6 @@ def _log_completions(completions: List[str], completions_file: str = None, **kwa
     except Exception as e:
         print(f"Warning: Could not save completions to {completions_file}: {e}")
 
-def _mean(xs: List[float]) -> float:
-    return float(np.mean(xs)) if len(xs) else 0.0
-
-def _hist(xs: List[float]):
-    try:
-        import wandb
-        return wandb.Histogram(xs)
-    except Exception:
-        return None
-
 
 # --- Helper functions
 TAG_RE = re.compile(r"^<answer>\s*(\[.*\])\s*</answer>\s*$", re.DOTALL)
@@ -77,7 +71,7 @@ def _is_int(v) -> bool:
         return isinstance(v, int)
 
 def _validate_item(d: Dict[str, Any]) -> bool:
-    """Schema validator"""
+    """ Schema validator """
     if not isinstance(d, dict):
         return False
 
@@ -141,7 +135,9 @@ def _param_score_int(a: int, b: int, span: int, thresh: float = 0.3) -> float:
     return 1.0 - err
 
 def _shape_factor(pred_shape: str, ref_shape: str) -> float:
-    """1.0 exact shape, 0.6 same family, 0.2 cross-family."""
+    """
+    1.0 exact shape, 0.6 same family, 0.2 cross-family.
+    """
     if pred_shape == ref_shape:
         return 1.0
     pf, rf = SHAPE_FAMILY.get(pred_shape, ""), SHAPE_FAMILY.get(ref_shape, "")
