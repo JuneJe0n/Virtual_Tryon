@@ -5,6 +5,11 @@ build/
 dist/
 wheels/
 *.egg-info
+.python_version
 
 # Virtual environments
 .venv
+
+# wandb log
+wandb/
+

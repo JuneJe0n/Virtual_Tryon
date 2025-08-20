@@ -3,6 +3,7 @@ Inference script for LViton GRPO model
 """
 import os
 import json
+import re
 import torch
 from datetime import datetime
 from PIL import Image
@@ -74,28 +75,33 @@ def generate_response(model, processor, image_path: str, max_new_tokens: int = 5
     return response
 
 
-def save_result_to_json(response: str, image_path: str, output_dir: str = "/home/jiyoon/data/json/test_results"):
-    """Save the generated response to a JSON file"""
+def clean_response(response: str) -> str:
+    """Clean the response by removing escape characters and extracting content from <answer> tags"""
+    # Remove common escape sequences
+    cleaned = response.replace('\\n', '\n').replace('\\t', '\t').replace('\\"', '"').replace("\\'", "'")
+    
+    # Extract content between <answer> tags if they exist
+    answer_match = re.search(r'<answer>(.*?)</answer>', cleaned, re.DOTALL)
+    if answer_match:
+        cleaned = answer_match.group(1).strip()
+    
+    return cleaned
+
+
+def save_result_to_json(response: str, image_path: str, output_dir: str, base_model_id: str, checkpoint_path: str):
+    """ Save the generated response to a JSON file """
     os.makedirs(output_dir, exist_ok=True)
+    
+    # Clean the response
+    cleaned_response = clean_response(response)
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     image_name = os.path.basename(image_path).split('.')[0]
     output_filename = f"{image_name}_{timestamp}.json"
     output_path = os.path.join(output_dir, output_filename)
     
-    result_data = {
-        "timestamp": datetime.now().isoformat(),
-        "image_path": image_path,
-        "image_name": image_name,
-        "response": response,
-        "model_info": {
-            "base_model": "Qwen/Qwen2.5-VL-3B-Instruct",
-            "checkpoint": "/home/jiyoon/data/ckpts/Qwen2.5-VL-3B-Instruct-GRPO/checkpoint-400"
-        }
-    }
-    
     with open(output_path, 'w', encoding='utf-8') as f:
-        json.dump(result_data, f, indent=2, ensure_ascii=False)
+        f.write(cleaned_response)
     
     return output_path
 
@@ -103,7 +109,8 @@ def save_result_to_json(response: str, image_path: str, output_dir: str = "/home
 def main():
     BASE_MODEL = "Qwen/Qwen2.5-VL-3B-Instruct"
     CKPT_PATH = "/home/jiyoon/data/ckpts/Qwen2.5-VL-3B-Instruct-GRPO/checkpoint-400"
-    IMG_PATH = "/home/jiyoon/data/imgs/test_results/5275_june.png"
+    IMG_PATH = "/home/jiyoon/data/imgs/test_results/3338_000552.png"
+    OUTPUT_DIR = "/home/jiyoon/data/json/test_results/v0"
     max_tokens = 512
     
     print("Loading model...")
@@ -113,7 +120,7 @@ def main():
     response = generate_response(model, processor, IMG_PATH, max_tokens)
     
     print("\nSaving result to JSON...")
-    json_path = save_result_to_json(response, IMG_PATH)
+    json_path = save_result_to_json(response, IMG_PATH, OUTPUT_DIR, BASE_MODEL, CKPT_PATH)
     print(f"Result saved to: {json_path}")
 
 
