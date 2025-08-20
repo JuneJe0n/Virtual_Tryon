@@ -20,9 +20,8 @@ from trl import GRPOConfig, GRPOTrainer
 from utils import (
     FormatReward,
     AccuracyReward,
-    DuplicateShapeGuardReward,
     weighted,
-    set_completions_file,
+    set_completions_dir,
 )
 
 
@@ -33,9 +32,12 @@ OUTPUT_DIR = "/home/jiyoon/data/ckpts/Qwen2.5-VL-3B-Instruct-GRPO-v1"
 VAL_RATIO = 0.05
 SEED = 42
 
+WANDB_NAME = "qwen2.5-vl-v1-run1"
+
 COMPLETIONS_BASE = "/home/jiyoon/data/jsonl/completions"
 VERSION = "v1"
-RUN = "run0"
+RUN = "run1"
+ROTATE = 500
 
 
 # --- CLI
@@ -55,12 +57,12 @@ def main():
     args = parse_args()
 
     # --- wandb
-    wandb.init(project="lviton_grpo", name="qwen2.5-vl-v1-run0", resume="allow", dir='/home/jiyoon/data/wandb')
+    wandb.init(project="lviton_grpo", name=WANDB_NAME, resume="allow", dir='/home/jiyoon/data/wandb')
     set_completions_dir(
         base_dir=COMPLETIONS_BASE,
         version=VERSION,
         run=RUN,
-        rotate_every=50
+        rotate_every=ROTATE
         )
 
     # --- load base model & processor

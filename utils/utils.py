@@ -21,10 +21,10 @@ def _mean(xs: List[float]) -> float:
 
 # --- Completion logging
 _COMPLETIONS_DIR: Optional[str] = None   
-_ROTATE_EVERY: int = 50
+_ROTATE_EVERY: int = 500
 _CALLS: int = 0
 
-def set_completions_dir(base_dir: str, version: str = "v1", run: str = "run0", rotate_every: int = 50):
+def set_completions_dir(base_dir: str, version: str = "v1", run: str = "run0", rotate_every: int = 500):
     """
     Set completions directory for a specific version/run.
     Files will be saved as:
@@ -166,14 +166,14 @@ def _param_score_int(a: int, b: int, span: int) -> float:
 
 def _shape_factor(pred_shape: str, ref_shape: str) -> float:
     """
-    1.0 exact shape, 0.6 same family, 0.2 cross-family.
+    1.0 exact shape, 0.8 same family, 0.2 cross-family.
     """
     if pred_shape == ref_shape:
         return 1.0
     pf, rf = SHAPE_FAMILY.get(pred_shape, ""), SHAPE_FAMILY.get(ref_shape, "")
     if pf and rf and pf == rf:
-        return 0.6
-    return 0.0
+        return 0.8
+    return 0.2
 
 def _match_and_score_hungarian(pred_list: List[Dict[str,Any]], ref_list: List[Dict[str,Any]]) -> float:
     """
@@ -191,6 +191,9 @@ def _match_and_score_hungarian(pred_list: List[Dict[str,Any]], ref_list: List[Di
 
     ALPHA_SPAN, SIGMA_SPAN, GAMMA_SPAN = 255, 255, 100
 
+    # for logging
+    c_scores, a_scores, s_scores, g_scores = [], [], [], []
+
     # Similarity matrix S (n x m)
     S = np.zeros((n, m), dtype=float)
     for i, p in enumerate(pred_list):
@@ -199,6 +202,13 @@ def _match_and_score_hungarian(pred_list: List[Dict[str,Any]], ref_list: List[Di
             a_score = _param_score_int(p["alpha"], r["alpha"], ALPHA_SPAN)
             s_score = _param_score_int(p["sigma"], r["sigma"], SIGMA_SPAN)
             g_score = _param_score_int(p["gamma"], r.get("gamma", 0), GAMMA_SPAN)
+
+            # collect for logging
+            c_scores.append(c_score)
+            a_scores.append(a_score)
+            s_scores.append(s_score)
+            g_scores.append(g_score)
+
             param_sim = 0.7*c_score + 0.15*a_score + 0.1*s_score + 0.05*g_score
             sf = _shape_factor(p["shape"], r["shape"])
             S[i, j] = sf * param_sim
@@ -226,6 +236,15 @@ def _match_and_score_hungarian(pred_list: List[Dict[str,Any]], ref_list: List[Di
     base = sum(sims) / float(dim)
     miss_penalty = 0.15 * max(0, unmatched_refs)
     final = max(0.0, base - miss_penalty)
+
+    # log means of component scores to wandb
+    _wandb_log({
+        "acc_reward/c_score_mean": _mean(c_scores),
+        "acc_reward/a_score_mean": _mean(a_scores),
+        "acc_reward/s_score_mean": _mean(s_scores),
+        "acc_reward/g_score_mean": _mean(g_scores),
+    })
+
     return final
 
 def weighted(reward_callable, weight: float):
