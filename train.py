@@ -32,11 +32,11 @@ OUTPUT_DIR = "/home/jiyoon/data/ckpts/Qwen2.5-VL-3B-Instruct-GRPO-v4"
 VAL_RATIO = 0.05
 SEED = 42
 
-WANDB_NAME = "qwen2.5-vl-v4-run0"
+WANDB_NAME = "qwen2.5-vl-v4-run1"
 
 COMPLETIONS_BASE = "/home/jiyoon/data/jsonl/completions"
 VERSION = "v4"
-RUN = "run0"
+RUN = "run1"
 ROTATE = 500
 
 
