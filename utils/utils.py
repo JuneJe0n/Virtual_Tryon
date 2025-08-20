@@ -172,8 +172,8 @@ def _shape_factor(pred_shape: str, ref_shape: str) -> float:
         return 1.0
     pf, rf = SHAPE_FAMILY.get(pred_shape, ""), SHAPE_FAMILY.get(ref_shape, "")
     if pf and rf and pf == rf:
-        return 0.8
-    return 0.2
+        return 0.7
+    return 0.0
 
 def _match_and_score_hungarian(pred_list: List[Dict[str,Any]], ref_list: List[Dict[str,Any]]) -> float:
     """
@@ -192,7 +192,7 @@ def _match_and_score_hungarian(pred_list: List[Dict[str,Any]], ref_list: List[Di
     ALPHA_SPAN, SIGMA_SPAN, GAMMA_SPAN = 255, 255, 100
 
     # for logging
-    c_scores, a_scores, s_scores, g_scores = [], [], [], []
+    c_scores, a_scores, s_scores, g_scores, sh_scores = [], [], [], [], []
 
     # Similarity matrix S (n x m)
     S = np.zeros((n, m), dtype=float)
@@ -202,16 +202,18 @@ def _match_and_score_hungarian(pred_list: List[Dict[str,Any]], ref_list: List[Di
             a_score = _param_score_int(p["alpha"], r["alpha"], ALPHA_SPAN)
             s_score = _param_score_int(p["sigma"], r["sigma"], SIGMA_SPAN)
             g_score = _param_score_int(p["gamma"], r.get("gamma", 0), GAMMA_SPAN)
+            sh_score = _shape_factor(p["shape"], r["shape"])
 
             # collect for logging
             c_scores.append(c_score)
             a_scores.append(a_score)
             s_scores.append(s_score)
             g_scores.append(g_score)
+            sh_scores.append(sh_score)
 
-            param_sim = 0.7*c_score + 0.15*a_score + 0.1*s_score + 0.05*g_score
-            sf = _shape_factor(p["shape"], r["shape"])
-            S[i, j] = sf * param_sim
+            sim = 0.50*c_score + 0.25*sh_score + 0.10*a_score + 0.10*s_score + 0.05*g_score
+
+            S[i, j] = float(max(0.0, min(1.0, sim)))
 
     # Convert to score to cost 
     C = 1.0 - S
@@ -243,6 +245,7 @@ def _match_and_score_hungarian(pred_list: List[Dict[str,Any]], ref_list: List[Di
         "acc_reward/a_score_mean": _mean(a_scores),
         "acc_reward/s_score_mean": _mean(s_scores),
         "acc_reward/g_score_mean": _mean(g_scores),
+        "acc_reward/sh_score_mean": _mean(sh_scores),
     })
 
     return final
