@@ -28,14 +28,14 @@ from utils import (
 # --- Config
 MODEL_ID = "Qwen/Qwen2.5-VL-3B-Instruct"
 TRAIN_JSONL = "/home/jiyoon/data/jsonl/training_data/all_looks.jsonl"  # {"image","solution","prompt"}
-OUTPUT_DIR = "/home/jiyoon/data/ckpts/Qwen2.5-VL-3B-Instruct-GRPO-v2"
+OUTPUT_DIR = "/home/jiyoon/data/ckpts/Qwen2.5-VL-3B-Instruct-GRPO-v3"
 VAL_RATIO = 0.05
 SEED = 42
 
-WANDB_NAME = "qwen2.5-vl-v2-run0"
+WANDB_NAME = "qwen2.5-vl-v3-run0"
 
 COMPLETIONS_BASE = "/home/jiyoon/data/jsonl/completions"
-VERSION = "v2"
+VERSION = "v3"
 RUN = "run0"
 ROTATE = 500
 
@@ -140,7 +140,7 @@ def main():
     fmt_reward = FormatReward(w_tags=0.3, w_json=0.3, w_schema=0.4)
     acc_reward = AccuracyReward(reference_key="solution")
 
-    L_F, L_A = 0.2, 1.0
+    L_F, L_A = 0.2, 1.5
     reward_fns = [
         weighted(fmt_reward, L_F),
         weighted(acc_reward, L_A),

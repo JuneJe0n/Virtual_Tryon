@@ -90,6 +90,7 @@ def _log_completions(completions: List[str], completions_file: str = None, **kwa
         print(f"Warning: Could not save completions to {target}: {e}")
     finally:
         _CALLS += 1
+    
 
 # --- Helper functions
 TAG_RE = re.compile(r"^<answer>\s*(\[.*\])\s*</answer>\s*$", re.DOTALL)
@@ -104,33 +105,54 @@ def _is_int(v) -> bool:
     except Exception:
         return isinstance(v, int)
 
-def _validate_item(d: Dict[str, Any]) -> bool:
-    """ Schema validator """
+def _soft_rgb_validation(value) -> float:
+    """Graduated RGB validation instead of binary"""
+    try:
+        v = int(value)
+        if 0 <= v <= 255:
+            return 1.0
+        elif 256 <= v <= 270:
+            return 0.9
+        elif 271 <= v <= 300:
+            return 0.7
+        else:
+            return 0.0
+    except:
+        return 0.0
+
+def _validate_item(d: Dict[str, Any]) -> float:
+    """ Schema validator with graduated scoring """
     if not isinstance(d, dict):
-        return False
+        return 0.0
 
     if "shape" not in d or not isinstance(d["shape"], str):
-        return False
+        return 0.0
     if d["shape"] not in ALLOWED_SHAPES:
-        return False
+        return 0.0
 
     c = d.get("color", {})
     if not isinstance(c, dict):
-        return False
+        return 0.0
+    
+    # Graduated RGB validation
+    rgb_scores = []
     for k in ("r", "g", "b"):
-        if k not in c or not _is_int(c[k]) or not (0 <= int(c[k]) <= 255):
-            return False
-
+        if k not in c or not _is_int(c[k]):
+            return 0.0
+        rgb_scores.append(_soft_rgb_validation(c[k]))
+    
+    # Alpha validation (keep binary for now)
     if "alpha" not in d or not _is_int(d["alpha"]) or not (0 <= int(d["alpha"]) <= 255):
-        return False
+        return 0.0
 
     if "sigma" not in d or not _is_int(d["sigma"]):
-        return False
+        return 0.0
 
     if "gamma" not in d or not _is_int(d["gamma"]):
-        return False
+        return 0.0
 
-    return True
+    # Return average of RGB scores 
+    return sum(rgb_scores) / len(rgb_scores)
 
 def _safe_load_json(arr_str: str) -> Optional[List[Dict[str, Any]]]:
     """
@@ -146,16 +168,70 @@ def _safe_load_json(arr_str: str) -> Optional[List[Dict[str, Any]]]:
     except Exception:
         return None
 
+def _rgb_to_xyz(r: int, g: int, b: int) -> tuple:
+    """Convert RGB to XYZ color space"""
+    # Normalize RGB to 0-1
+    r, g, b = r / 255.0, g / 255.0, b / 255.0
+    
+    # Apply gamma correction
+    def gamma_correct(c):
+        return ((c + 0.055) / 1.055) ** 2.4 if c > 0.04045 else c / 12.92
+    
+    r, g, b = gamma_correct(r), gamma_correct(g), gamma_correct(b)
+    
+    # Convert to XYZ using sRGB matrix
+    x = r * 0.4124564 + g * 0.3575761 + b * 0.1804375
+    y = r * 0.2126729 + g * 0.7151522 + b * 0.0721750
+    z = r * 0.0193339 + g * 0.1191920 + b * 0.9503041
+    
+    return x, y, z
+
+def _xyz_to_lab(x: float, y: float, z: float) -> tuple:
+    """Convert XYZ to LAB color space"""
+    # D65 illuminant
+    xn, yn, zn = 0.95047, 1.0, 1.08883
+    
+    x, y, z = x / xn, y / yn, z / zn
+    
+    def f(t):
+        return t ** (1/3) if t > 0.008856 else (7.787 * t + 16/116)
+    
+    fx, fy, fz = f(x), f(y), f(z)
+    
+    l = 116 * fy - 16
+    a = 500 * (fx - fy)
+    b = 200 * (fy - fz)
+    
+    return l, a, b
+
+def _rgb_to_lab(r: int, g: int, b: int) -> tuple:
+    """Convert RGB directly to LAB"""
+    x, y, z = _rgb_to_xyz(r, g, b)
+    return _xyz_to_lab(x, y, z)
+
 def _color_score(a: Dict[str, int], b: Dict[str, int]) -> float:
     """
-    Normalized L1 distance in RGB space (0-1).
+    Perceptual color distance using Delta E in CIELAB space.
     1.0 if colors are identical.
-    Returns 0.0 if distance > thresh.
+    0.0 if Delta E >= 100 (very different colors).
     """
-    d = (abs(int(a["r"]) - int(b["r"])) +
-         abs(int(a["g"]) - int(b["g"])) +
-         abs(int(a["b"]) - int(b["b"]))) / (3 * 255)
-    return 1.0 - d
+    try:
+        lab_a = _rgb_to_lab(int(a["r"]), int(a["g"]), int(a["b"]))
+        lab_b = _rgb_to_lab(int(b["r"]), int(b["g"]), int(b["b"]))
+        
+        # Calculate Delta E (Euclidean distance in LAB space)
+        delta_e = ((lab_a[0] - lab_b[0]) ** 2 + 
+                   (lab_a[1] - lab_b[1]) ** 2 + 
+                   (lab_a[2] - lab_b[2]) ** 2) ** 0.5
+        
+        # Scale Delta E to 0-1 (Delta E ~100 = completely different)
+        return max(0.0, 1.0 - (delta_e / 100.0))
+    except:
+        # Fallback to original RGB distance if conversion fails
+        d = (abs(int(a["r"]) - int(b["r"])) +
+             abs(int(a["g"]) - int(b["g"])) +
+             abs(int(a["b"]) - int(b["b"]))) / (3 * 255)
+        return 1.0 - d
 
 def _param_score_int(a: int, b: int, span: int) -> float:
     """
@@ -294,8 +370,10 @@ class FormatReward:
             schema_ok = 0.0
             if json_ok:
                 items = _safe_load_json(arr)
-                if items and all(_validate_item(it) for it in items):
-                    schema_ok = 1.0
+                if items:
+                    # Average validation scores for all items
+                    scores = [_validate_item(it) for it in items]
+                    schema_ok = sum(scores) / len(scores) if scores else 0.0
 
             score = self.w_tags*tags_ok + self.w_json*json_ok + self.w_schema*schema_ok
             rewards.append(score)
@@ -328,7 +406,12 @@ class AccuracyReward:
             if not arr:
                 scores.append(0.0); continue
             pred_list = _safe_load_json(arr)
-            if not pred_list or not all(_validate_item(x) for x in pred_list):
+            if not pred_list:
+                scores.append(0.0); continue
+            
+            # Check if items have valid structure
+            item_scores = [_validate_item(x) for x in pred_list]
+            if not any(score > 0 for score in item_scores):
                 scores.append(0.0); continue
 
             scores.append(_match_and_score_hungarian(pred_list, ref_list))
