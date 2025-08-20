@@ -15,47 +15,81 @@ def _wandb_log(data: Dict[str, Any]):
     except Exception:
         pass
 
-# Global variable to store completions file path
-_COMPLETIONS_FILE = None
-
-def set_completions_file(filepath: str):
-    """Set the global completions file path"""
-    global _COMPLETIONS_FILE
-    _COMPLETIONS_FILE = filepath
-
-
 def _mean(xs: List[float]) -> float:
     return float(np.mean(xs)) if len(xs) else 0.0
 
 
 # --- Completion logging
-def _log_completions(completions: List[str], completions_file: str = None, **kwargs):
-    """Log completions to file"""
-    global _COMPLETIONS_FILE
-    if not completions_file:
-        completions_file = _COMPLETIONS_FILE
-    if not completions_file:
-        return
-    
+_COMPLETIONS_DIR: Optional[str] = None   
+_ROTATE_EVERY: int = 50
+_CALLS: int = 0
+
+def set_completions_dir(base_dir: str, version: str = "v1", run: str = "run0", rotate_every: int = 50):
+    """
+    Set completions directory for a specific version/run.
+    Files will be saved as:
+      <base_dir>/<version>/<run>/part000.jsonl
+    """
+    global _COMPLETIONS_DIR, _ROTATE_EVERY, _CALLS
+    _COMPLETIONS_DIR = os.path.join(base_dir, version, run)
+    _ROTATE_EVERY = max(1, int(rotate_every))
+    _CALLS = 0
+    os.makedirs(_COMPLETIONS_DIR, exist_ok=True)
+
+def _step_from(kwargs: Dict[str, Any]) -> Optional[int]:
+    for k in ("global_step", "step", "iteration"):
+        v = kwargs.get(k)
+        if v is None: 
+            continue
+        try:
+            vi = int(v)
+            if vi >= 0:
+                return vi
+        except Exception:
+            pass
     try:
-        # Create directory if it doesn't exist
-        os.makedirs(os.path.dirname(completions_file), exist_ok=True)
-        
-        # Save as readable text format
-        with open(completions_file, "a", encoding="utf-8") as f:
+        import wandb
+        if getattr(wandb, "run", None) is not None and hasattr(wandb.run, "step"):
+            s = wandb.run.step
+            if s is not None:
+                return int(s)
+    except Exception:
+        pass
+    return None
+
+def _rotated_path(step: Optional[int]) -> Optional[str]:
+    if not _COMPLETIONS_DIR:
+        return None
+    part = (step if step is not None else _CALLS) // _ROTATE_EVERY
+    return os.path.join(_COMPLETIONS_DIR, f"part{part:03d}.jsonl")
+
+def _log_completions(completions: List[str], completions_file: str = None, **kwargs):
+    global _CALLS
+    if not completions:
+        return
+
+    target = completions_file or _rotated_path(_step_from(kwargs))
+    if not target:
+        return
+
+    try:
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        with open(target, "a", encoding="utf-8") as f:
             f.write("=" * 80 + "\n")
             f.write(f"BATCH: {len(completions)} completions\n")
+            s = _step_from(kwargs)
+            if s is not None:
+                f.write(f"STEP: {s}\n")
             f.write("=" * 80 + "\n")
-            
-            for i, completion in enumerate(completions):
-                f.write(f"\n--- COMPLETION {i+1} ---\n")
-                f.write(completion)
+            for i, c in enumerate(completions, 1):
+                f.write(f"\n--- COMPLETION {i} ---\n")
+                f.write(c)
                 f.write("\n")
-            
             f.write("\n")
     except Exception as e:
-        print(f"Warning: Could not save completions to {completions_file}: {e}")
-
+        print(f"Warning: Could not save completions to {target}: {e}")
+    finally:
+        _CALLS += 1
 
 # --- Helper functions
 TAG_RE = re.compile(r"^<answer>\s*(\[.*\])\s*</answer>\s*$", re.DOTALL)
@@ -112,7 +146,7 @@ def _safe_load_json(arr_str: str) -> Optional[List[Dict[str, Any]]]:
     except Exception:
         return None
 
-def _color_score(a: Dict[str, int], b: Dict[str, int], thresh: float = 0.3) -> float:
+def _color_score(a: Dict[str, int], b: Dict[str, int]) -> float:
     """
     Normalized L1 distance in RGB space (0-1).
     1.0 if colors are identical.
@@ -121,17 +155,13 @@ def _color_score(a: Dict[str, int], b: Dict[str, int], thresh: float = 0.3) -> f
     d = (abs(int(a["r"]) - int(b["r"])) +
          abs(int(a["g"]) - int(b["g"])) +
          abs(int(a["b"]) - int(b["b"]))) / (3 * 255)
-    if d > thresh:
-        return 0.0
     return 1.0 - d
 
-def _param_score_int(a: int, b: int, span: int, thresh: float = 0.3) -> float:
+def _param_score_int(a: int, b: int, span: int) -> float:
     """
     Compare ints like alpha, sigma, gamma, relative to their allowed span.
     """
     err = abs(int(a) - int(b)) / max(1, span)  # normalized [0,1]
-    if err > thresh:
-        return 0.0
     return 1.0 - err
 
 def _shape_factor(pred_shape: str, ref_shape: str) -> float:
@@ -143,7 +173,7 @@ def _shape_factor(pred_shape: str, ref_shape: str) -> float:
     pf, rf = SHAPE_FAMILY.get(pred_shape, ""), SHAPE_FAMILY.get(ref_shape, "")
     if pf and rf and pf == rf:
         return 0.6
-    return 0.2
+    return 0.0
 
 def _match_and_score_hungarian(pred_list: List[Dict[str,Any]], ref_list: List[Dict[str,Any]]) -> float:
     """
@@ -169,7 +199,7 @@ def _match_and_score_hungarian(pred_list: List[Dict[str,Any]], ref_list: List[Di
             a_score = _param_score_int(p["alpha"], r["alpha"], ALPHA_SPAN)
             s_score = _param_score_int(p["sigma"], r["sigma"], SIGMA_SPAN)
             g_score = _param_score_int(p["gamma"], r.get("gamma", 0), GAMMA_SPAN)
-            param_sim = 0.25 * (c_score + a_score + s_score + g_score)
+            param_sim = 0.7*c_score + 0.15*a_score + 0.1*s_score + 0.05*g_score
             sf = _shape_factor(p["shape"], r["shape"])
             S[i, j] = sf * param_sim
 
@@ -251,10 +281,10 @@ class FormatReward:
 
         # wandb logging (means + hist)
         _wandb_log({
-            "reward/format": _mean(rewards),
-            "reward/format_tags": _mean(tags_flags),
-            "reward/format_json": _mean(json_flags),
-            "reward/format_schema": _mean(schema_flags),
+            "fmt_reward/mean": _mean(rewards),
+            "fmt_reward/tags": _mean(tags_flags),
+            "fmt_reward/json": _mean(json_flags),
+            "fmt_reward/schema": _mean(schema_flags),
         })
         return rewards
 
@@ -282,46 +312,8 @@ class AccuracyReward:
             scores.append(_match_and_score_hungarian(pred_list, ref_list))
 
         _wandb_log({
-            "reward/accuracy": _mean(scores),
+            "acc_reward/mean": _mean(scores),
         })
         return scores
 
 
-class DuplicateShapeGuardReward:
-    """
-    Penalize duplicate identical items (shape + color + alpha + sigma + gamma)
-      - no duplicates -> 1.0
-      - duplicates    -> dup_penalty (default 0.5)
-    """
-    def __init__(self, dup_penalty: float = 0.5):
-        self.dup_penalty = dup_penalty
-        self.name = "duplicate"
-
-    def __call__(self, completions: List[str], **kwargs) -> List[float]:
-        outs = []
-        dup_flags = []  # 1 if duplicate detected, else 0
-        for c in completions:
-            arr = _extract_json_block(c)
-            if not arr:
-                outs.append(0.0); dup_flags.append(0.0); continue
-            pred = _safe_load_json(arr)
-            if not pred:
-                outs.append(0.0); dup_flags.append(0.0); continue
-            seen = set(); ok = True
-            for o in pred:
-                key = (
-                    o.get("shape"),
-                    o.get("color",{}).get("r"), o.get("color",{}).get("g"), o.get("color",{}).get("b"),
-                    o.get("alpha"), o.get("sigma"), o.get("gamma"),
-                )
-                if key in seen:
-                    ok = False; break
-                seen.add(key)
-            outs.append(1.0 if ok else self.dup_penalty)
-            dup_flags.append(0.0 if ok else 1.0)
-
-        _wandb_log({
-            "reward/duplicate": _mean(outs),
-            "reward/duplicate_rate": _mean(dup_flags),  
-        })
-        return outs
