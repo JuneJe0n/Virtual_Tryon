@@ -105,23 +105,9 @@ def _is_int(v) -> bool:
     except Exception:
         return isinstance(v, int)
 
-def _soft_rgb_validation(value) -> float:
-    """Graduated RGB validation instead of binary"""
-    try:
-        v = int(value)
-        if 0 <= v <= 255:
-            return 1.0
-        elif 256 <= v <= 270:
-            return 0.9
-        elif 271 <= v <= 300:
-            return 0.7
-        else:
-            return 0.0
-    except:
-        return 0.0
 
 def _validate_item(d: Dict[str, Any]) -> float:
-    """ Schema validator with graduated scoring """
+    """ Schema validator with binary validation """
     if not isinstance(d, dict):
         return 0.0
 
@@ -134,25 +120,12 @@ def _validate_item(d: Dict[str, Any]) -> float:
     if not isinstance(c, dict):
         return 0.0
     
-    # Graduated RGB validation
-    rgb_scores = []
+    # Binary RGB validation
     for k in ("r", "g", "b"):
-        if k not in c or not _is_int(c[k]):
+        if k not in c or not _is_int(c[k]) or not (0 <= int(c[k]) <= 255):
             return 0.0
-        rgb_scores.append(_soft_rgb_validation(c[k]))
-    
-    # Alpha validation (keep binary for now)
-    if "alpha" not in d or not _is_int(d["alpha"]) or not (0 <= int(d["alpha"]) <= 255):
-        return 0.0
 
-    if "sigma" not in d or not _is_int(d["sigma"]):
-        return 0.0
-
-    if "gamma" not in d or not _is_int(d["gamma"]):
-        return 0.0
-
-    # Return average of RGB scores 
-    return sum(rgb_scores) / len(rgb_scores)
+    return 1.0
 
 def _safe_load_json(arr_str: str) -> Optional[List[Dict[str, Any]]]:
     """
@@ -209,6 +182,28 @@ def _rgb_to_lab(r: int, g: int, b: int) -> tuple:
     x, y, z = _rgb_to_xyz(r, g, b)
     return _xyz_to_lab(x, y, z)
 
+def _saturation_penalty(color: Dict[str, int]) -> float:
+    """
+    Apply penalty for saturated (grayscale) colors where r=g=b.
+    Returns multiplier: 1.0 for colorful, lower for grayscale.
+    """
+    try:
+        r, g, b = int(color["r"]), int(color["g"]), int(color["b"])
+        
+        # Check if all RGB values are identical (grayscale)
+        if r == g == b:
+            return 0.1  # Strong penalty for pure grayscale
+        
+        # Check for near-grayscale (small differences)
+        max_diff = max(abs(r-g), abs(r-b), abs(g-b))
+        if max_diff <= 5:  # Very close to grayscale
+            return 0.3
+        
+        # Colorful - no penalty
+        return 1.0
+    except:
+        return 1.0  # No penalty if parsing fails
+
 def _color_score(a: Dict[str, int], b: Dict[str, int]) -> float:
     """
     Perceptual color distance using Delta E in CIELAB space.
@@ -219,26 +214,24 @@ def _color_score(a: Dict[str, int], b: Dict[str, int]) -> float:
         lab_a = _rgb_to_lab(int(a["r"]), int(a["g"]), int(a["b"]))
         lab_b = _rgb_to_lab(int(b["r"]), int(b["g"]), int(b["b"]))
         
-        # Calculate Delta E (Euclidean distance in LAB space)
+        # Calculate Euclidean distance in LAB space
         delta_e = ((lab_a[0] - lab_b[0]) ** 2 + 
                    (lab_a[1] - lab_b[1]) ** 2 + 
                    (lab_a[2] - lab_b[2]) ** 2) ** 0.5
         
-        # Scale Delta E to 0-1 (Delta E ~100 = completely different)
-        return max(0.0, 1.0 - (delta_e / 100.0))
+        base_score = max(0.0, 1.0 - (delta_e / 100.0))
+        sat_penalty = _saturation_penalty(a)
+        
+        return base_score * sat_penalty
     except:
-        # Fallback to original RGB distance if conversion fails
+        print("🚨Fallback to original RGB distance if conversion fails")
         d = (abs(int(a["r"]) - int(b["r"])) +
              abs(int(a["g"]) - int(b["g"])) +
              abs(int(a["b"]) - int(b["b"]))) / (3 * 255)
-        return 1.0 - d
+        base_score = 1.0 - d
+        sat_penalty = _saturation_penalty(a)
+        return base_score * sat_penalty
 
-def _param_score_int(a: int, b: int, span: int) -> float:
-    """
-    Compare ints like alpha, sigma, gamma, relative to their allowed span.
-    """
-    err = abs(int(a) - int(b)) / max(1, span)  # normalized [0,1]
-    return 1.0 - err
 
 def _shape_factor(pred_shape: str, ref_shape: str) -> float:
     """
@@ -253,41 +246,35 @@ def _shape_factor(pred_shape: str, ref_shape: str) -> float:
 
 def _match_and_score_hungarian(pred_list: List[Dict[str,Any]], ref_list: List[Dict[str,Any]]) -> float:
     """
-    Optimal global assignment with soft shape factors and dummy padding.
-    
-    - Similarity(p,r) = shape_factor * param_similarity
-    - Cost = 1 - Similarity
-    - Score = mean(matched_similarities) normalized by max(n_pred, n_ref) minus 0.15 per unmatched ref.
+    Simplified matching focused on color and shape extraction.
+    Uses fixed values for alpha=50, sigma=60, gamma=0 based on training data analysis.
     """
     n, m = len(pred_list), len(ref_list)
     if n == 0 and m == 0:
         return 1.0
     if n == 0 or m == 0:
-        return 0.0  # clamp to 0; no matches possible
+        return 0.0
 
-    ALPHA_SPAN, SIGMA_SPAN, GAMMA_SPAN = 255, 255, 100
+    # Fixed parameter values based on training data analysis
+    FIXED_ALPHA, FIXED_SIGMA, FIXED_GAMMA = 50, 60, 0
 
     # for logging
-    c_scores, a_scores, s_scores, g_scores, sh_scores = [], [], [], [], []
+    c_scores, sh_scores, sat_penalties = [], [], []
 
-    # Similarity matrix S (n x m)
+    # Similarity matrix S (n x m) - focus on color and shape only
     S = np.zeros((n, m), dtype=float)
     for i, p in enumerate(pred_list):
         for j, r in enumerate(ref_list):
             c_score = _color_score(p["color"], r["color"])
-            a_score = _param_score_int(p["alpha"], r["alpha"], ALPHA_SPAN)
-            s_score = _param_score_int(p["sigma"], r["sigma"], SIGMA_SPAN)
-            g_score = _param_score_int(p["gamma"], r.get("gamma", 0), GAMMA_SPAN)
             sh_score = _shape_factor(p["shape"], r["shape"])
+            sat_penalty = _saturation_penalty(p["color"])
 
             # collect for logging
             c_scores.append(c_score)
-            a_scores.append(a_score)
-            s_scores.append(s_score)
-            g_scores.append(g_score)
             sh_scores.append(sh_score)
+            sat_penalties.append(sat_penalty)
 
-            sim = 0.50*c_score + 0.25*sh_score + 0.10*a_score + 0.10*s_score + 0.05*g_score
+            sim = 0.65 * c_score + 0.35 * sh_score
 
             S[i, j] = float(max(0.0, min(1.0, sim)))
 
@@ -318,10 +305,8 @@ def _match_and_score_hungarian(pred_list: List[Dict[str,Any]], ref_list: List[Di
     # log means of component scores to wandb
     _wandb_log({
         "acc_reward/c_score_mean": _mean(c_scores),
-        "acc_reward/a_score_mean": _mean(a_scores),
-        "acc_reward/s_score_mean": _mean(s_scores),
-        "acc_reward/g_score_mean": _mean(g_scores),
         "acc_reward/sh_score_mean": _mean(sh_scores),
+        "acc_reward/sat_penalty_mean": _mean(sat_penalties),
     })
 
     return final

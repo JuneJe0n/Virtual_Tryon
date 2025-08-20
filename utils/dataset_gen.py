@@ -14,9 +14,9 @@ from transformers import AutoProcessor
 from prompts import SYSTEM_PROMPT, QUESTION
 
 # Paths
-JSON_PATH   = "/home/jiyoon/data/json/makeup_looks/lviton-makeups.json"      # makeup looks json
-IMAGES_DIR  = "/home/jiyoon/data/imgs/makeup_results"            # files named {makeupId}_{ffhqId}.png
-OUT_JSONL   = "/home/jiyoon/data/jsonl/ameli_looks.jsonl"           # output jsonl
+JSON_PATH   = "/home/jiyoon/data/json/makeup_looks/random_looks.json"      # makeup looks json
+IMAGES_DIR  = "/home/jiyoon/data/imgs/random_results"            # files named {makeupId}_{ffhqId}.png
+OUT_JSONL   = "/home/jiyoon/data/jsonl/training_data/only_colors/random_looks.jsonl"           # output jsonl
 
 # Qwen model id for chat template building
 MODEL_ID = "Qwen/Qwen2.5-VL-3B-Instruct"
@@ -25,8 +25,8 @@ MODEL_ID = "Qwen/Qwen2.5-VL-3B-Instruct"
 def load_makeup_solutions(json_path):
     """
     Parse looks JSON -> {makeup_id(str): [option_dict, ...]}.
-    - Keeps: shape, color(r,g,b), alpha, sigma, gamma
-    - Drops: split
+    - Keeps: shape, color(r,g,b)
+    - Drops: split, alpha, sigma, gamma
     - Deduplicates identical option dicts
     - Keys in the map are STRINGS so they can be "A0" or "7906".
     """
@@ -51,11 +51,7 @@ def load_makeup_solutions(json_path):
                         "r": opt.get("color", {}).get("r"),
                         "g": opt.get("color", {}).get("g"),
                         "b": opt.get("color", {}).get("b"),
-                    },
-                    "alpha": opt.get("alpha"),
-                    "sigma": opt.get("sigma"),
-                    # ALWAYS include gamma; default to 0 if not provided
-                    "gamma": opt.get("gamma", 0) if opt.get("gamma") is not None else 0,
+                    }
                 }
                 merged.append(out)
 
@@ -65,7 +61,6 @@ def load_makeup_solutions(json_path):
             key = (
                 o["shape"],
                 o["color"]["r"], o["color"]["g"], o["color"]["b"],
-                o["alpha"], o["sigma"], o["gamma"],
             )
             if key not in seen:
                 seen.add(key)
