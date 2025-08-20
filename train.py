@@ -55,7 +55,7 @@ def main():
     args = parse_args()
 
     # --- wandb
-    wandb.init(project="lviton_grpo", name="qwen2.5-vl-v1-run0", resume="allow")
+    wandb.init(project="lviton_grpo", name="qwen2.5-vl-v1-run0", resume="allow", dir='/home/jiyoon/data/wandb')
     set_completions_dir(
         base_dir=COMPLETIONS_BASE,
         version=VERSION,
