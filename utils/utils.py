@@ -192,7 +192,7 @@ def _saturation_penalty(color: Dict[str, int]) -> float:
         
         # Check if all RGB values are identical (grayscale)
         if r == g == b:
-            return 0.1  # Strong penalty for pure grayscale
+            return 0.05  # Strong penalty for pure grayscale
         
         # Check for near-grayscale (small differences)
         max_diff = max(abs(r-g), abs(r-b), abs(g-b))
@@ -210,6 +210,12 @@ def _color_score(a: Dict[str, int], b: Dict[str, int]) -> float:
     1.0 if colors are identical.
     0.0 if Delta E >= 100 (very different colors).
     """
+    # Validate color dictionaries have required keys
+    for color_dict in [a, b]:
+        for key in ['r', 'g', 'b']:
+            if key not in color_dict:
+                return 0.0  # Invalid color gets 0 score
+    
     try:
         lab_a = _rgb_to_lab(int(a["r"]), int(a["g"]), int(a["b"]))
         lab_b = _rgb_to_lab(int(b["r"]), int(b["g"]), int(b["b"]))
@@ -225,12 +231,15 @@ def _color_score(a: Dict[str, int], b: Dict[str, int]) -> float:
         return base_score * sat_penalty
     except:
         print("🚨Fallback to original RGB distance if conversion fails")
-        d = (abs(int(a["r"]) - int(b["r"])) +
-             abs(int(a["g"]) - int(b["g"])) +
-             abs(int(a["b"]) - int(b["b"]))) / (3 * 255)
-        base_score = 1.0 - d
-        sat_penalty = _saturation_penalty(a)
-        return base_score * sat_penalty
+        try:
+            d = (abs(int(a["r"]) - int(b["r"])) +
+                 abs(int(a["g"]) - int(b["g"])) +
+                 abs(int(a["b"]) - int(b["b"]))) / (3 * 255)
+            base_score = 1.0 - d
+            sat_penalty = _saturation_penalty(a)
+            return base_score * sat_penalty
+        except:
+            return 0.0  # If fallback also fails, return 0
 
 
 def _shape_factor(pred_shape: str, ref_shape: str) -> float:
@@ -265,9 +274,15 @@ def _match_and_score_hungarian(pred_list: List[Dict[str,Any]], ref_list: List[Di
     S = np.zeros((n, m), dtype=float)
     for i, p in enumerate(pred_list):
         for j, r in enumerate(ref_list):
-            c_score = _color_score(p["color"], r["color"])
-            sh_score = _shape_factor(p["shape"], r["shape"])
-            sat_penalty = _saturation_penalty(p["color"])
+            # Handle missing keys gracefully
+            p_color = p.get("color", {})
+            r_color = r.get("color", {})
+            p_shape = p.get("shape", "")
+            r_shape = r.get("shape", "")
+            
+            c_score = _color_score(p_color, r_color) if p_color and r_color else 0.0
+            sh_score = _shape_factor(p_shape, r_shape) if p_shape and r_shape else 0.0
+            sat_penalty = _saturation_penalty(p_color) if p_color else 0.0
 
             # collect for logging
             c_scores.append(c_score)

@@ -14,9 +14,9 @@ from transformers import AutoProcessor
 from prompts import SYSTEM_PROMPT, QUESTION
 
 # Paths
-JSON_PATH   = "/home/jiyoon/data/json/makeup_looks/random_looks.json"      # makeup looks json
-IMAGES_DIR  = "/home/jiyoon/data/imgs/random_results"            # files named {makeupId}_{ffhqId}.png
-OUT_JSONL   = "/home/jiyoon/data/jsonl/training_data/only_colors/random_looks.jsonl"           # output jsonl
+JSON_PATH   = "/home/jiyoon/data/json/makeup_looks_cleaned/ameli_looks_cleaned.json"      # makeup looks json
+IMAGES_DIR  = "/home/jiyoon/data/imgs/cleaned_looks/ameli"            # files named {makeupId}_{ffhqId}.png
+OUT_JSONL   = "/home/jiyoon/data/jsonl/training_data/cleaned/ameli_looks.jsonl"           # output jsonl
 
 # Qwen model id for chat template building
 MODEL_ID = "Qwen/Qwen2.5-VL-3B-Instruct"
