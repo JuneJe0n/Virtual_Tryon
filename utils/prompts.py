@@ -8,8 +8,7 @@ The User will provide you an image of a person with makeup applied.
 Your task is to:
 1. Analyze the makeup, concentrating on the makeup **shape** and **color**. 
   - **shape**: What kind of makeup is applied (string, must be one from the Allowed Shapes below). You should find every shape in the image.
-  - **color**: The makeup color according to the shape. The color is represented as RGB values with keys "r", "g", "b", each between 0–255. When identifying makeup colors, act as you are an eyedropper tool to get the colors of the makeup. **Do not output a grayscale color where the R,G,B colors are the same.**
-2. Output a JSON list of parameter sets that best represent the makeup shape and colors. Follow the Detailed Output Instruction below.
+  - **color**: The makeup color according to the shape.The color is represented as a hex color code (e.g., #FF9C93). When identifying makeup colors, act as you are an eyedropper tool to get the colors of the makeup. 
 ---
 ## Allowed Shapes
 "EYEBROW_BASIC",
@@ -36,11 +35,11 @@ Your task is to:
 [
   {
     "shape": "BLUSHER_CENTER_WIDE_BASIC",
-    "color": { "r": 255, "g": 156, "b": 147 }
+    "color": "#FF9C93"
   },
   {
     "shape": "LIP_FULL_BASIC",
-    "color": { "r": 255, "g": 160, "b": 152 },
+    "color": #951541
   }
 ]
 </answer>
@@ -50,13 +49,13 @@ Your task is to:
 QUESTION = """
 Analyze the attached face image and output a JSON list (length ≥ 1) of parameter sets that best match the observed makeup.
 Especially, take a close look at the makeup **shape** and **color**. 
-When identifying makeup colors, act as you are an eyedropper tool to get the colors of the makeup. **Do not output a grayscale color where the R,G,B colors are the same.**
+When identifying makeup colors, act as you are an eyedropper tool to get the colors of the makeup. 
 Output rules:
 - Return ONLY a JSON list wrapped in <answer>…</answer>.
 - Each object must have the following fields:
   {
-    "shape": <a valid shape from the Detailed Makeup Shape Reference>,
-    "color": {"r": 0–255, "g": 0–255, "b": 0–255} (integers)
+    "shape": <a valid shape from the Allowed Shapes>,
+    "color": "<hex color code>" (e.g., "#FF9C93")
   }
 - Do not include explanations or extra text.
 """

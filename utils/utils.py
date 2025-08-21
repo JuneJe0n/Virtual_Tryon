@@ -106,21 +106,6 @@ def _is_int(v) -> bool:
         return isinstance(v, int)
 
 
-def _rgb_missing_penalty(color: Dict[str, Any]) -> float:
-    """
-    Apply penalty if at least one of r, g, b does not exist.
-    Returns 0.0 if any RGB component is missing, 1.0 if all are present.
-    """
-    if not isinstance(color, dict):
-        return 0.2
-    
-    required_keys = ["r", "g", "b"]
-    for key in required_keys:
-        if key not in color:
-            return 0.2
-    
-    return 1.0
-
 def _validate_item(d: Dict[str, Any]) -> float:
     """ Schema validator with binary validation """
     if not isinstance(d, dict):
@@ -131,17 +116,9 @@ def _validate_item(d: Dict[str, Any]) -> float:
     if d["shape"] not in ALLOWED_SHAPES:
         return 0.2
 
-    c = d.get("color", {})
-    if not isinstance(c, dict):
+    c = d.get("color", "")
+    if not isinstance(c, str) or not c.startswith("#") or len(c) != 7:
         return 0.2
-    
-    rgb_penalty = _rgb_missing_penalty(c)
-    if rgb_penalty == 0.2:
-        return 0.2
-    
-    for k in ("r", "g", "b"):
-        if k not in c or not _is_int(c[k]) or not (0 <= int(c[k]) <= 255):
-            return 0.2
 
     return 1.0
 
@@ -158,6 +135,19 @@ def _safe_load_json(arr_str: str) -> Optional[List[Dict[str, Any]]]:
         return None
     except Exception:
         return None
+
+def _hex_to_rgb(hex_color: str) -> tuple:
+    """Convert hex color to RGB tuple"""
+    hex_color = hex_color.lstrip('#')
+    if len(hex_color) != 6:
+        raise ValueError(f"Invalid hex color: {hex_color}")
+    try:
+        r = int(hex_color[0:2], 16)
+        g = int(hex_color[2:4], 16)
+        b = int(hex_color[4:6], 16)
+        return r, g, b
+    except ValueError:
+        raise ValueError(f"Invalid hex color: {hex_color}")
 
 def _rgb_to_xyz(r: int, g: int, b: int) -> tuple:
     """Convert RGB to XYZ color space"""
@@ -200,43 +190,39 @@ def _rgb_to_lab(r: int, g: int, b: int) -> tuple:
     x, y, z = _rgb_to_xyz(r, g, b)
     return _xyz_to_lab(x, y, z)
 
-def _saturation_penalty(color: Dict[str, int]) -> float:
+def _saturation_penalty(color: str) -> float:
     """
     Apply penalty for saturated (grayscale) colors where r=g=b.
     Returns multiplier: 1.0 for colorful, lower for grayscale.
     """
     try:
-        r, g, b = int(color["r"]), int(color["g"]), int(color["b"])
+        r, g, b = _hex_to_rgb(color)
         
         # Check if all RGB values are identical (grayscale)
         if r == g == b:
             return 0.2  
-        
-        # Check for near-grayscale (small differences)
-        max_diff = max(abs(r-g), abs(r-b), abs(g-b))
-        if max_diff <= 5:  # Very close to grayscale
-            return 0.3
         
         # Colorful - no penalty
         return 1.0
     except:
         return 1.0  # No penalty if parsing fails
 
-def _color_score(a: Dict[str, int], b: Dict[str, int]) -> float:
+def _color_score(a: str, b: str) -> float:
     """
     Perceptual color distance using Delta E in CIELAB space.
     1.0 if colors are identical.
     0.0 if Delta E >= 100 (very different colors).
     """
-    # Validate color dictionaries have required keys
-    for color_dict in [a, b]:
-        for key in ['r', 'g', 'b']:
-            if key not in color_dict:
-                return 0.2  # Invalid color gets 0 score
+    # Validate color strings
+    if not isinstance(a, str) or not isinstance(b, str):
+        return 0.2  # Invalid color
     
     try:
-        lab_a = _rgb_to_lab(int(a["r"]), int(a["g"]), int(a["b"]))
-        lab_b = _rgb_to_lab(int(b["r"]), int(b["g"]), int(b["b"]))
+        r_a, g_a, b_a = _hex_to_rgb(a)
+        r_b, g_b, b_b = _hex_to_rgb(b)
+        
+        lab_a = _rgb_to_lab(r_a, g_a, b_a)
+        lab_b = _rgb_to_lab(r_b, g_b, b_b)
         
         # Calculate Euclidean distance in LAB space
         delta_e = ((lab_a[0] - lab_b[0]) ** 2 + 
@@ -250,14 +236,14 @@ def _color_score(a: Dict[str, int], b: Dict[str, int]) -> float:
     except:
         print("🚨Fallback to original RGB distance if conversion fails")
         try:
-            d = (abs(int(a["r"]) - int(b["r"])) +
-                 abs(int(a["g"]) - int(b["g"])) +
-                 abs(int(a["b"]) - int(b["b"]))) / (3 * 255)
+            r_a, g_a, b_a = _hex_to_rgb(a)
+            r_b, g_b, b_b = _hex_to_rgb(b)
+            d = (abs(r_a - r_b) + abs(g_a - g_b) + abs(b_a - b_b)) / (3 * 255)
             base_score = 1.0 - d
             sat_penalty = _saturation_penalty(a)
             return base_score * sat_penalty
         except:
-            return 0.0  # If fallback also fails, return 0
+            return 0.2  # If fallback also fails, return 0.2
 
 
 def _shape_factor(pred_shape: str, ref_shape: str) -> float:
@@ -293,8 +279,8 @@ def _match_and_score_hungarian(pred_list: List[Dict[str,Any]], ref_list: List[Di
     for i, p in enumerate(pred_list):
         for j, r in enumerate(ref_list):
             # Handle missing keys gracefully
-            p_color = p.get("color", {})
-            r_color = r.get("color", {})
+            p_color = p.get("color", "")
+            r_color = r.get("color", "")
             p_shape = p.get("shape", "")
             r_shape = r.get("shape", "")
             
@@ -340,6 +326,7 @@ def _match_and_score_hungarian(pred_list: List[Dict[str,Any]], ref_list: List[Di
         "acc_reward/c_score_mean": _mean(c_scores),
         "acc_reward/sh_score_mean": _mean(sh_scores),
         "acc_reward/sat_penalty_mean": _mean(sat_penalties),
+        "acc_reward/miss_penalty": miss_penalty,
     })
 
     return final

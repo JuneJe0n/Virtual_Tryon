@@ -27,15 +27,15 @@ from utils import (
 
 # --- Config
 MODEL_ID = "Qwen/Qwen2.5-VL-3B-Instruct"
-TRAIN_JSONL = "/home/jiyoon/data/jsonl/training_data/cleaned/all_looks.jsonl"  # {"image","solution","prompt"}
-OUTPUT_DIR = "/home/jiyoon/data/ckpts/Qwen2.5-VL-3B-Instruct-GRPO-v5"
+TRAIN_JSONL = "/home/jiyoon/data/jsonl/training_data/hex/all_looks_hex.jsonl"  # {"image","solution","prompt"}
+OUTPUT_DIR = "/home/jiyoon/data/ckpts/Qwen2.5-VL-3B-Instruct-GRPO-v6"
 VAL_RATIO = 0.05
 SEED = 42
 
-WANDB_NAME = "qwen2.5-vl-v5-run0"
+WANDB_NAME = "qwen2.5-vl-v6-run0"
 
 COMPLETIONS_BASE = "/home/jiyoon/data/jsonl/completions"
-VERSION = "v5"
+VERSION = "v6"
 RUN = "run0"
 ROTATE = 500
 
