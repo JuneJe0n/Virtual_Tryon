@@ -17,10 +17,10 @@ from typing import Any, Dict, List, Tuple
 
 
 # ─── SETTINGS ─────────────────────────────────────────────────────────────────
-PRODUCTS_JSON = Path("/home/jiyoon/LViton/data/json/lviton-options.json")   # products json
-OUT_DIR        = Path("/home/jiyoon/LViton/data/json")           # output path
-N_LOOKS        = 9913                                    # how many random looks to make
-SEED           = 1234       
+PRODUCTS_JSON = Path("/home/jiyoon/data/json/lviton-options.json")   # products json
+OUT_DIR        = Path("/home/jiyoon/data/json/makeup_looks/test_20.json")           # output path
+N_LOOKS        = 20                                 # how many random looks to make
+SEED           = 1230       
 
 # Option count per look (picked randomly in this inclusive range, limited by available classes)
 MIN_CLASSES    = 3

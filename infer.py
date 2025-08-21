@@ -1,11 +1,12 @@
 """
 Full inference pipeline
-Input : model ckpt, GT makeup imgs
-Output : generated options JSON, generated makeup applied img
+Input : model ckpt, GT makeup img folder
+Output : generated options JSON, generated makeup applied img folder
 """
 import os
 import json
 import re
+import glob
 import torch
 from datetime import datetime
 from PIL import Image
@@ -138,6 +139,32 @@ def generate_response(model, processor, image_path: str, max_new_tokens: int = 5
     return response
 
 
+def extract_ffhq_id_from_filename(filename: str) -> str:
+    """Extract FFHQ ID from filename pattern {makeupid}_{FFHQ_id}.png"""
+    basename = os.path.basename(filename)
+    name_without_ext = os.path.splitext(basename)[0]
+    
+    # Split by underscore and get the last part as FFHQ_id
+    parts = name_without_ext.split('_')
+    if len(parts) >= 2:
+        return parts[-1]  # Last part should be FFHQ_id
+    else:
+        raise ValueError(f"Invalid filename format: {filename}. Expected format: {{makeupid}}_{{FFHQ_id}}.png")
+
+
+def get_bare_face_path(ffhq_id: str, ffhq_folder: str = "/home/jiyoon/data/FFHQ") -> str:
+    """Get the path to the bare face image based on FFHQ_id"""
+    # Common image extensions to check
+    extensions = ['.png', '.jpg', '.jpeg', '.PNG', '.JPG', '.JPEG']
+    
+    for ext in extensions:
+        potential_path = os.path.join(ffhq_folder, f"{ffhq_id}{ext}")
+        if os.path.exists(potential_path):
+            return potential_path
+    
+    raise FileNotFoundError(f"Bare face image for FFHQ_id '{ffhq_id}' not found in {ffhq_folder}")
+
+
 def clean_response(response: str) -> str:
     """Clean the response by removing escape characters and extracting content from <answer> tags"""
     # Remove common escape sequences
@@ -221,28 +248,59 @@ def apply_makeup_to_bare_face(json_path: str, bare_face_path: str, output_dir: s
 
 def main():
     BASE_MODEL = "Qwen/Qwen2.5-VL-3B-Instruct"
-    CKPT_PATH = "/home/jiyoon/data/ckpts/Qwen2.5-VL-3B-Instruct-GRPO-v6/checkpoint-150"
-    IMG_PATH = "/home/jiyoon/data/imgs/test/makeup_face/v6/7905_june.png"
-    JSON_OUTPUT_DIR = "/home/jiyoon/data/json/test_results/v6/ckpt-150"
-    BARE_FACE_PATH = "/home/jiyoon/data/imgs/test/bare_face/june.JPG"
+    CKPT_PATH = "/home/jiyoon/data/ckpts/Qwen2.5-VL-3B-Instruct-GRPO-v6/checkpoint-200"
+    IMG_PATH = "/home/jiyoon/data/imgs/test/makeup_face/v6"
+    JSON_OUTPUT_DIR = "/home/jiyoon/data/json/test_results/v6/ckpt-200"
     APPLIED_OUTPUT_DIR = "/home/jiyoon/data/imgs/test/test_results_applied/v6"
+    FFHQ_FOLDER = "/home/jiyoon/data/FFHQ"
     max_tokens = 512
 
-    print(f"✅ GT imf in: {IMG_PATH}")
+    print(f"✅ Processing images from folder: {IMG_PATH}")
+    
+    # Get all image files from the folder
+    image_extensions = ['*.png', '*.jpg', '*.jpeg', '*.PNG', '*.JPG', '*.JPEG']
+    image_files = []
+    for ext in image_extensions:
+        image_files.extend(glob.glob(os.path.join(IMG_PATH, ext)))
+    
+    if not image_files:
+        print(f"❌ No image files found in {IMG_PATH}")
+        return
+    
+    print(f"Found {len(image_files)} images to process")
     
     print("Loading model...")
     model, processor = load_model_and_processor(CKPT_PATH, BASE_MODEL)
 
-    print("Generating response...")
-    response = generate_response(model, processor, IMG_PATH, max_tokens)
+    # Process each image
+    for i, image_path in enumerate(image_files, 1):
+        print(f"\n--- Processing image {i}/{len(image_files)}: {os.path.basename(image_path)} ---")
+        
+        try:
+            # Extract FFHQ_id from filename
+            ffhq_id = extract_ffhq_id_from_filename(image_path)
+            print(f"Extracted FFHQ_id: {ffhq_id}")
+            
+            # Get corresponding bare face path
+            bare_face_path = get_bare_face_path(ffhq_id, FFHQ_FOLDER)
+            print(f"Found bare face: {bare_face_path}")
+            
+            print("Generating response...")
+            response = generate_response(model, processor, image_path, max_tokens)
+            
+            print("Saving result to JSON...")
+            json_path = save_result_to_json(response, image_path, JSON_OUTPUT_DIR, BASE_MODEL, CKPT_PATH)
+            print(f"✅ JSON result saved to: {json_path}")
+            
+            print("Applying makeup to bare face image...")
+            applied_path = apply_makeup_to_bare_face(json_path, bare_face_path, APPLIED_OUTPUT_DIR)
+            print(f"✅ Applied makeup image saved to: {applied_path}")
+            
+        except Exception as e:
+            print(f"❌ Error processing {os.path.basename(image_path)}: {str(e)}")
+            continue
     
-    print("\nSaving result to JSON...")
-    json_path = save_result_to_json(response, IMG_PATH, JSON_OUTPUT_DIR, BASE_MODEL, CKPT_PATH)
-    print(f"✅ JSON result saved to: {json_path}")
-    
-    print(f"\nApplying makeup to bare face image...")
-    applied_path = apply_makeup_to_bare_face(json_path, BARE_FACE_PATH, APPLIED_OUTPUT_DIR)
-    print(f"✅ Applied makeup image saved to: {applied_path}")
+    print(f"\n🎉 Completed processing all images!")
 
 
 if __name__ == "__main__": 
