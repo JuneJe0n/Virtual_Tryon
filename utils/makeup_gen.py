@@ -15,9 +15,9 @@ import numpy as np
 from lviton import LViton, MakeupOptions, MakeupShape
 
 # ─── PATH SETTINGS ──────────────────────────────────────────────
-JSON_FILE = Path("/home/jiyoon/data/json/makeup_looks_cleaned/ameli_looks_two.json")  # makeup look json
+JSON_FILE = Path("/home/jiyoon/data/json/test_results/v6/7905_june_20250821_141206.json")  # makeup look json
 BARE_DIR = Path("/home/jiyoon/data/imgs/test/bare_face")  # face imgs
-OUT_DIR = Path("/home/jiyoon/data/imgs/test/makeup_face")  # output path
+OUT_DIR = Path("/home/jiyoon/data/imgs/test/test_results_applied/v6")  # output path
 LIB_PATH = Path("/home/jiyoon/LViton_GRPO/LViton/lib/liblviton-x86_64-linux-3.0.3.so")  # compiled LViton shared library
 FACE_LANDMARKER = Path("/home/jiyoon/LViton_GRPO/LViton/model/face_landmarker.task")  # mediapipe model
 RANDOM_SEED = 42
@@ -45,6 +45,17 @@ def load_random_bare_face(bare_faces: list[Path]) -> tuple[Path, np.ndarray] | N
         return None
 
 
+def hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
+    """Convert hex color to RGB tuple."""
+    hex_color = hex_color.lstrip('#')
+    if len(hex_color) != 6:
+        return (0, 0, 0)
+    try:
+        return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    except ValueError:
+        return (0, 0, 0)
+
+
 def build_makeup_options(product_list: list[dict]) -> list[MakeupOptions]:
     """Build list of MakeupOptions from JSON product definitions."""
     options: list[MakeupOptions] = []
@@ -58,8 +69,17 @@ def build_makeup_options(product_list: list[dict]) -> list[MakeupOptions]:
             except AttributeError:
                 # Unknown shape in JSON — skip it.
                 continue
-            color = opt.get("color", {})
-            r, g, b = int(color.get("r", 0)), int(color.get("g", 0)), int(color.get("b", 0))
+            
+            color = opt.get("color", "#000000")
+            if isinstance(color, str):
+                # Handle hex color format
+                r, g, b = hex_to_rgb(color)
+            elif isinstance(color, dict):
+                # Handle legacy RGB dict format
+                r, g, b = int(color.get("r", 0)), int(color.get("g", 0)), int(color.get("b", 0))
+            else:
+                r, g, b = 0, 0, 0
+            
             alpha = int(opt.get("alpha", 255))
             sigma = int(opt.get("sigma", 0))
             gamma = int(opt.get("gamma", 128))

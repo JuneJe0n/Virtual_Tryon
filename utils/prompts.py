@@ -11,6 +11,7 @@ Your task is to:
   - **color**: The makeup color according to the shape.The color is represented as a hex color code (e.g., #FF9C93). When identifying makeup colors, act as you are an eyedropper tool to get the colors of the makeup. 
 ---
 ## Allowed Shapes
+"FACE_BASIC",
 "EYEBROW_BASIC",
 "EYESHADOW_OVEREYE_FULL_BASIC",
 "EYESHADOW_OVEREYE_CENTER_BASIC",
