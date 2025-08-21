@@ -106,24 +106,42 @@ def _is_int(v) -> bool:
         return isinstance(v, int)
 
 
+def _rgb_missing_penalty(color: Dict[str, Any]) -> float:
+    """
+    Apply penalty if at least one of r, g, b does not exist.
+    Returns 0.0 if any RGB component is missing, 1.0 if all are present.
+    """
+    if not isinstance(color, dict):
+        return 0.2
+    
+    required_keys = ["r", "g", "b"]
+    for key in required_keys:
+        if key not in color:
+            return 0.2
+    
+    return 1.0
+
 def _validate_item(d: Dict[str, Any]) -> float:
     """ Schema validator with binary validation """
     if not isinstance(d, dict):
-        return 0.0
+        return 0.2
 
     if "shape" not in d or not isinstance(d["shape"], str):
-        return 0.0
+        return 0.2
     if d["shape"] not in ALLOWED_SHAPES:
-        return 0.0
+        return 0.2
 
     c = d.get("color", {})
     if not isinstance(c, dict):
-        return 0.0
+        return 0.2
     
-    # Binary RGB validation
+    rgb_penalty = _rgb_missing_penalty(c)
+    if rgb_penalty == 0.2:
+        return 0.2
+    
     for k in ("r", "g", "b"):
         if k not in c or not _is_int(c[k]) or not (0 <= int(c[k]) <= 255):
-            return 0.0
+            return 0.2
 
     return 1.0
 
@@ -192,7 +210,7 @@ def _saturation_penalty(color: Dict[str, int]) -> float:
         
         # Check if all RGB values are identical (grayscale)
         if r == g == b:
-            return 0.05  # Strong penalty for pure grayscale
+            return 0.2  
         
         # Check for near-grayscale (small differences)
         max_diff = max(abs(r-g), abs(r-b), abs(g-b))
@@ -214,7 +232,7 @@ def _color_score(a: Dict[str, int], b: Dict[str, int]) -> float:
     for color_dict in [a, b]:
         for key in ['r', 'g', 'b']:
             if key not in color_dict:
-                return 0.0  # Invalid color gets 0 score
+                return 0.2  # Invalid color gets 0 score
     
     try:
         lab_a = _rgb_to_lab(int(a["r"]), int(a["g"]), int(a["b"]))
@@ -251,7 +269,7 @@ def _shape_factor(pred_shape: str, ref_shape: str) -> float:
     pf, rf = SHAPE_FAMILY.get(pred_shape, ""), SHAPE_FAMILY.get(ref_shape, "")
     if pf and rf and pf == rf:
         return 0.7
-    return 0.0
+    return 0.2
 
 def _match_and_score_hungarian(pred_list: List[Dict[str,Any]], ref_list: List[Dict[str,Any]]) -> float:
     """
@@ -262,7 +280,7 @@ def _match_and_score_hungarian(pred_list: List[Dict[str,Any]], ref_list: List[Di
     if n == 0 and m == 0:
         return 1.0
     if n == 0 or m == 0:
-        return 0.0
+        return 0.2
 
     # Fixed parameter values based on training data analysis
     FIXED_ALPHA, FIXED_SIGMA, FIXED_GAMMA = 50, 60, 0
@@ -280,9 +298,9 @@ def _match_and_score_hungarian(pred_list: List[Dict[str,Any]], ref_list: List[Di
             p_shape = p.get("shape", "")
             r_shape = r.get("shape", "")
             
-            c_score = _color_score(p_color, r_color) if p_color and r_color else 0.0
-            sh_score = _shape_factor(p_shape, r_shape) if p_shape and r_shape else 0.0
-            sat_penalty = _saturation_penalty(p_color) if p_color else 0.0
+            c_score = _color_score(p_color, r_color) if p_color and r_color else 0.2
+            sh_score = _shape_factor(p_shape, r_shape) if p_shape and r_shape else 0.2
+            sat_penalty = _saturation_penalty(p_color) if p_color else 0.2
 
             # collect for logging
             c_scores.append(c_score)
@@ -364,16 +382,16 @@ class FormatReward:
         _log_completions(completions, **kwargs)
         
         for content in completions:
-            tags_ok = 1.0 if TAG_RE.match(content.strip()) else 0.0
+            tags_ok = 1.0 if TAG_RE.match(content.strip()) else 0.2
             arr = _extract_json_block(content) if tags_ok else None
-            json_ok = 1.0 if (arr and _safe_load_json(arr) is not None) else 0.0
-            schema_ok = 0.0
+            json_ok = 1.0 if (arr and _safe_load_json(arr) is not None) else 0.2
+            schema_ok = 0.2
             if json_ok:
                 items = _safe_load_json(arr)
                 if items:
                     # Average validation scores for all items
                     scores = [_validate_item(it) for it in items]
-                    schema_ok = sum(scores) / len(scores) if scores else 0.0
+                    schema_ok = sum(scores) / len(scores) if scores else 0.2
 
             score = self.w_tags*tags_ok + self.w_json*json_ok + self.w_schema*schema_ok
             rewards.append(score)
@@ -404,15 +422,15 @@ class AccuracyReward:
             ref_list = refs[i] if refs is not None else []
             arr = _extract_json_block(content)
             if not arr:
-                scores.append(0.0); continue
+                scores.append(0.2); continue
             pred_list = _safe_load_json(arr)
             if not pred_list:
-                scores.append(0.0); continue
+                scores.append(0.2); continue
             
             # Check if items have valid structure
             item_scores = [_validate_item(x) for x in pred_list]
             if not any(score > 0 for score in item_scores):
-                scores.append(0.0); continue
+                scores.append(0.2); continue
 
             scores.append(_match_and_score_hungarian(pred_list, ref_list))
 

@@ -91,40 +91,14 @@ SHAPE_FAMILY = {
     "EYESHADOW_INNEREYE_BASIC": "eyeshadow",
     "EYESHADOW_LOWEREYE_BASIC": "eyeshadow",
     "EYESHADOW_LOWEREYE_TRI_BASIC": "eyeshadow",
-    "EYESHADOW_OVEREYE_SP": "eyeshadow",
-    "EYESHADOW_OVEREYE_CENTER_SP": "eyeshadow",
-    "EYESHADOW_OVEREYE_OUTER_SP": "eyeshadow",
-    "EYESHADOW_INNEREYE_SP": "eyeshadow",
-    "EYESHADOW_LOWEREYE_SP": "eyeshadow",
-    "EYESHADOW_OVEREYE_GL": "eyeshadow",
-    "EYESHADOW_OVEREYE_CENTER_GL": "eyeshadow",
-    "EYESHADOW_OVEREYE_OUTER_GL": "eyeshadow",
-    "EYESHADOW_LOWEREYE_GL": "eyeshadow",
-    # Eyeliner
-    "EYELINER_FILL_BASIC": "eyeliner",
-    "EYELINER_TAIL_DOWN_SHORT_BASIC": "eyeliner",
-    # Nose
-    "NOSE_SHADING_FULL_BASIC": "nose",
-    "NOSE_SHADING_LONG_BASIC": "nose",
-    "NOSE_SHADING_SHORT_BASIC": "nose",
     # Blusher
     "BLUSHER_SIDE_WIDE_BASIC": "blush",
     "BLUSHER_CENTER_WIDE_BASIC": "blush",
     "BLUSHER_TOP_SLIM_BASIC": "blush",
     "BLUSHER_GEN_Z_SIDE_BASIC": "blush",
     "BLUSHER_GEN_Z_CENTER_BASIC": "blush",
-    # Highlighter
-    "HIGHLIGHTER_EYES_BASIC": "highlight",
-    "HIGHLIGHTER_CHEEKBONE_BASIC": "highlight",
-    "HIGHLIGHTER_NOSE_BRIDGE_BASIC": "highlight",
-    "HIGHLIGHTER_NOSETIP_BASIC": "highlight",
-    "HIGHLIGHTER_FOREHEAD_BASIC": "highlight",
-    "HIGHLIGHTER_EYELID_BASIC": "highlight",
-    "HIGHLIGHTER_INNEREYE_BASIC": "highlight",
-    "HIGHLIGHTER_CHINTIP_BASIC": "highlight",
     # Lip
-    "LIP_FULL_BASIC": "lip",
-    "LIP_THIN_BASIC": "lip",
+    "LIP_FULL_BASIC": "lip"
 }
 
 
