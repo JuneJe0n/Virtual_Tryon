@@ -52,7 +52,7 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-# --- Train!
+# --- Train 🚀
 def main():
     args = parse_args()
 

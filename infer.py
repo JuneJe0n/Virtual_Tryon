@@ -1,5 +1,7 @@
 """
 Inference script for LViton GRPO model
+Input : Image w makeup done
+Output : JSON of genrated response
 """
 import os
 import json
@@ -108,9 +110,9 @@ def save_result_to_json(response: str, image_path: str, output_dir: str, base_mo
 
 def main():
     BASE_MODEL = "Qwen/Qwen2.5-VL-3B-Instruct"
-    CKPT_PATH = "/home/jiyoon/data/ckpts/Qwen2.5-VL-3B-Instruct-GRPO/checkpoint-400"
-    IMG_PATH = "/home/jiyoon/data/imgs/test_results/3338_000552.png"
-    OUTPUT_DIR = "/home/jiyoon/data/json/test_results/v0"
+    CKPT_PATH = "/home/jiyoon/data/ckpts/Qwen2.5-VL-3B-Instruct-GRPO-v5/checkpoint-50"
+    IMG_PATH = "/home/jiyoon/data/imgs/test/makeup_face/7905_june.png"
+    OUTPUT_DIR = "/home/jiyoon/data/json/test_results/v1"
     max_tokens = 512
     
     print("Loading model...")

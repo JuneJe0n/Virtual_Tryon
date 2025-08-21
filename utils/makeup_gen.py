@@ -15,9 +15,9 @@ import numpy as np
 from lviton import LViton, MakeupOptions, MakeupShape
 
 # ─── PATH SETTINGS ──────────────────────────────────────────────
-JSON_FILE = Path("/home/jiyoon/data/json/makeup_looks_cleaned/random_looks_cleaned.json")  # makeup look json
-BARE_DIR = Path("/home/jiyoon/data/FFHQ")  # face imgs
-OUT_DIR = Path("/home/jiyoon/data/imgs/cleaned_looks/random")  # output path
+JSON_FILE = Path("/home/jiyoon/data/json/makeup_looks_cleaned/ameli_looks_two.json")  # makeup look json
+BARE_DIR = Path("/home/jiyoon/data/imgs/test/bare_face")  # face imgs
+OUT_DIR = Path("/home/jiyoon/data/imgs/test/makeup_face")  # output path
 LIB_PATH = Path("/home/jiyoon/LViton_GRPO/LViton/lib/liblviton-x86_64-linux-3.0.3.so")  # compiled LViton shared library
 FACE_LANDMARKER = Path("/home/jiyoon/LViton_GRPO/LViton/model/face_landmarker.task")  # mediapipe model
 RANDOM_SEED = 42
