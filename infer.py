@@ -199,14 +199,15 @@ def save_result_to_json(response: str, image_path: str, output_dir: str, base_mo
     return output_path
 
 
-def apply_makeup_to_bare_face(json_path: str, bare_face_path: str, output_dir: str):
-    """Apply makeup from JSON to bare face image and save result."""
+def apply_makeup_to_bare_face(json_path: str, bare_face_path: str, gt_image_path: str, ffhq_id: str, output_dir: str):
+    """Apply makeup from JSON to bare face image and save result in ffhq_id folder."""
     # Load JSON data
     with open(json_path, 'r', encoding='utf-8') as f:
         json_data = json.load(f)
     
-    # Create output directory
-    os.makedirs(output_dir, exist_ok=True)
+    # Create ffhq_id subdirectory
+    ffhq_output_dir = os.path.join(output_dir, ffhq_id)
+    os.makedirs(ffhq_output_dir, exist_ok=True)
     
     # Load bare face image
     if not os.path.exists(bare_face_path):
@@ -214,6 +215,17 @@ def apply_makeup_to_bare_face(json_path: str, bare_face_path: str, output_dir: s
     
     bare_face = Image.open(bare_face_path).convert("RGB")
     img_rgba = pil_to_rgba_array(bare_face)
+    
+    # Save bare face as bare.png
+    bare_output_path = os.path.join(ffhq_output_dir, "bare.png")
+    bare_face.save(bare_output_path)
+    print(f"Bare face saved to: {bare_output_path}")
+    
+    # Copy GT image as gt.png
+    gt_image = Image.open(gt_image_path).convert("RGB")
+    gt_output_path = os.path.join(ffhq_output_dir, "gt.png")
+    gt_image.save(gt_output_path)
+    print(f"GT image saved to: {gt_output_path}")
     
     # Initialize LViton
     lib_path = "/home/jiyoon/LViton_GRPO/LViton/lib/liblviton-x86_64-linux-3.0.3.so"
@@ -233,17 +245,12 @@ def apply_makeup_to_bare_face(json_path: str, bare_face_path: str, output_dir: s
     # Apply makeup
     result_rgb = lviton.apply_makeup(makeup_options)
     
-    # Save result
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    json_filename = os.path.basename(json_path).split('.')[0]
-    bare_face_filename = os.path.basename(bare_face_path).split('.')[0]
-    output_filename = f"{json_filename}_{bare_face_filename}_applied.png"
-    output_path = os.path.join(output_dir, output_filename)
+    # Save applied makeup as applied.png
+    applied_output_path = os.path.join(ffhq_output_dir, "applied.png")
+    lviton.save_png(result_rgb, applied_output_path)
+    print(f"Applied makeup saved to: {applied_output_path}")
     
-    lviton.save_png(result_rgb, output_path)
-    print(f"Applied makeup saved to: {output_path}")
-    
-    return output_path
+    return applied_output_path
 
 
 def main():
@@ -293,7 +300,7 @@ def main():
             print(f"✅ JSON result saved to: {json_path}")
             
             print("Applying makeup to bare face image...")
-            applied_path = apply_makeup_to_bare_face(json_path, bare_face_path, APPLIED_OUTPUT_DIR)
+            applied_path = apply_makeup_to_bare_face(json_path, bare_face_path, image_path, ffhq_id, APPLIED_OUTPUT_DIR)
             print(f"✅ Applied makeup image saved to: {applied_path}")
             
         except Exception as e:
