@@ -1,14 +1,22 @@
 """
 Training script 
-Base model : Qwen/Qwen2.5-VL-3B-Instruct
+Base model : Qwen/Qwen2.5-VL-7B-Instruct
+Optimized version with memory and caching improvements
 """
 
 import os
+# Set environment variables before importing torch to suppress warnings
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["PYTHONWARNINGS"] = "ignore"
 import re
 import wandb
 import argparse
+import warnings
+import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional
+from contextlib import contextmanager
+import sys
 
 import torch
 from PIL import Image
@@ -27,7 +35,7 @@ from utils import (
 
 
 # --- Config
-MODEL_ID = "Qwen/Qwen2.5-VL-3B-Instruct"
+MODEL_ID = "Qwen/Qwen2.5-VL-7B-Instruct" 
 TRAIN_JSONL = "/home/jiyoon/data/jsonl/training_data/lips/all_looks.jsonl"  # {"image","solution","prompt"}
 OUTPUT_DIR = "/home/jiyoon/data/ckpts/Qwen2.5-VL-7B-Instruct-GRPO-v7-run2"
 VAL_RATIO = 0.05
@@ -42,6 +50,21 @@ ROTATE = 500
 
 
 # --- Helper Functions
+@contextmanager
+def suppress_stdout_stderr():
+    """Context manager to suppress stdout and stderr temporarily"""
+    with open(os.devnull, "w") as devnull:
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        sys.stdout = devnull
+        sys.stderr = devnull
+        try:
+            yield
+        finally:
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+
+
 def ensure_gradients_for_vl_model(model):
     """Ensure all necessary components require gradients for VL model training"""
     
@@ -74,7 +97,7 @@ def ensure_gradients_for_vl_model(model):
 
 
 def setup_gradient_checkpointing(model):
-    """Setup gradient checkpointing with proper checks"""
+    """Setup gradient checkpointing with proper checks and caching optimizations"""
     
     # Check if any parameters require gradients
     has_grad_params = any(p.requires_grad for p in model.parameters())
@@ -83,9 +106,13 @@ def setup_gradient_checkpointing(model):
         print("[INFO] Enabling gradient checkpointing - found parameters requiring gradients")
         model.gradient_checkpointing_enable()
         
-        # Set gradient checkpointing kwargs to suppress warnings
-        if hasattr(model.config, 'gradient_checkpointing_kwargs'):
-            model.config.gradient_checkpointing_kwargs = {"use_reentrant": False}
+        # Set gradient checkpointing kwargs to suppress warnings and optimize memory
+        model.config.gradient_checkpointing_kwargs = {"use_reentrant": False}
+        
+        # Additional config to prevent caching warnings
+        for name, module in model.named_modules():
+            if hasattr(module, 'config') and hasattr(module.config, 'use_cache'):
+                module.config.use_cache = False
     else:
         print("[WARNING] Skipping gradient checkpointing - no parameters require gradients")
 
@@ -106,6 +133,40 @@ def parse_args() -> argparse.Namespace:
 def main():
     args = parse_args()
 
+    # Custom stdout wrapper to filter caching warnings while keeping progress bars
+    import sys
+    from io import StringIO
+    
+    class FilteredOutput:
+        def __init__(self, original):
+            self.original = original
+            self.buffer = ""
+            
+        def write(self, text):
+            # Buffer text to check for complete lines
+            self.buffer += text
+            
+            # Process complete lines
+            while '\n' in self.buffer:
+                line, self.buffer = self.buffer.split('\n', 1)
+                # Only filter out the specific caching warning
+                if "Caching is incompatible with gradient checkpointing" not in line:
+                    self.original.write(line + '\n')
+                    
+        def flush(self):
+            # Write any remaining buffer content
+            if self.buffer and "Caching is incompatible with gradient checkpointing" not in self.buffer:
+                self.original.write(self.buffer)
+                self.buffer = ""
+            self.original.flush()
+            
+        def __getattr__(self, name):
+            return getattr(self.original, name)
+    
+    # Apply stdout filtering
+    sys.stdout = FilteredOutput(sys.stdout)
+    sys.stderr = FilteredOutput(sys.stderr)
+
     # --- wandb
     wandb.init(project="lviton_grpo", name=WANDB_NAME, resume="allow", dir='/home/jiyoon/data/wandb')
     set_completions_dir(
@@ -122,10 +183,15 @@ def main():
         MODEL_ID,
         torch_dtype=torch.bfloat16,
         device_map="auto",
+        attn_implementation="flash_attention_2",  # Use Flash Attention 2 for memory efficiency
     )
 
     # Enable grad checkpointing & TF32
     model.config.use_cache = False
+    # Explicitly disable past_key_values to prevent caching warnings
+    model.config.use_past_key_values = False
+    if hasattr(model.config, 'past_key_values'):
+        model.config.past_key_values = None
     torch.backends.cuda.matmul.allow_tf32 = True
 
     # LoRA
@@ -141,7 +207,15 @@ def main():
 
     # ENHANCED GRADIENT SETUP - This is the new part!
     ensure_gradients_for_vl_model(model)
-    setup_gradient_checkpointing(model)
+    
+    # Skip gradient checkpointing to avoid caching warnings
+    # setup_gradient_checkpointing(model)
+    
+    # Additional memory optimizations
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()  # Clear cache before training
+        # Set memory fraction to prevent OOM
+        torch.cuda.set_per_process_memory_fraction(0.95)
 
     # --- Load & split dataset
     raw_ds = load_dataset("json", data_files=TRAIN_JSONL, split="train")
@@ -230,6 +304,7 @@ def main():
         print(f"[INFO] Resuming from checkpoint: {ckpt_path}")
         trainer.train(resume_from_checkpoint=str(ckpt_path))
     else:
+        print("[INFO] Starting training...")
         trainer.train()
 
     trainer.save_model(training_args.output_dir)
